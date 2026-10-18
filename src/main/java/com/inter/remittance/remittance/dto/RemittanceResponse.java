@@ -15,6 +15,6 @@ public record RemittanceResponse(
 		@Schema(description = "Buy quotation applied (cotacaoCompra)", example = "5.2073") BigDecimal quotation,
 		@Schema(description = "BRL balance of the user after the operation", example = "1000.00") BigDecimal balanceBrl,
 		@Schema(description = "USD balance of the user after the operation", example = "346.52") BigDecimal balanceUsd,
-		@Schema(description = "BRL already used today against the daily limit (external transfers only)", example = "500.00", nullable = true) BigDecimal dailyReachedAmount,
-		@Schema(description = "Daily limit in BRL for the sender (external transfers only)", example = "10000.00", nullable = true) BigDecimal dailyLimit) {
+		@Schema(description = "BRL already used today against the daily limit (buy operations)", example = "500.00", nullable = true) BigDecimal dailyReachedAmount,
+		@Schema(description = "Daily limit in BRL for the sender (buy operations)", example = "10000.00", nullable = true) BigDecimal dailyLimit) {
 }

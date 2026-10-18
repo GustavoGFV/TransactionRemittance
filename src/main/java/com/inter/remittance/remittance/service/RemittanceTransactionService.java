@@ -71,7 +71,7 @@ public class RemittanceTransactionService {
 
 	/**
 	 * Debits the sender's BRL and credits USD to the beneficiary. 
-	 * Only external transfers consume the daily limit.
+	 * Every purchase, same-account or external, counts toward the sender's daily limit.
 	 * Rows are locked in id order, which prevents deadlocks between concurrent transfers in opposite directions.
 	 */
 	@Transactional
@@ -89,15 +89,13 @@ public class RemittanceTransactionService {
 			throw new InvalidRemittanceException("Amount is too small to buy at least US$ 0.01");
 		}
 
-		UserDailyTransaction daily = sameAccount ? null : registerDailyUsage(sender, amountBrl);
-
 		sender.debitBrl(amountBrl);
 		beneficiary.creditUsd(amountUsd);
+		UserDailyTransaction daily = registerDailyUsage(sender, amountBrl);
 
 		return new RemittanceResponse(RemittanceType.BUY, sender.getPublicId(), beneficiary.getPublicId(),
 				amountBrl, amountUsd, quotation, sender.getBalanceBrl(), sender.getBalanceUsd(),
-				daily == null ? null : daily.getReachedAmount(),
-				daily == null ? null : daily.getRule().getMaxAmount());
+				daily.getReachedAmount(), daily.getRule().getMaxAmount());
 	}
 
 	/**
@@ -125,7 +123,7 @@ public class RemittanceTransactionService {
 	/**
 	 * Resolves the user that owns the recipient document.
 	 * A recipient equal to the sender is rejected, since that scenario is covered by isSameAccount=true
-	 * and is not subject to the daily limit.
+	 * (the daily limit applies to both).
 	 */
 	private UUID resolveRecipient(BuyRemittanceRequest request) {
 		if (request.recipientDocument() == null || request.recipientDocument().isBlank()) {

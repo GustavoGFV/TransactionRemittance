@@ -96,7 +96,7 @@ public class RemittanceController {
 	@PostMapping("/buy")
 	@Operation(summary = "Buy USD with BRL",
 			description = "Debits the sender's BRL and credits USD at the current buy quotation. With isSameAccount=true the USD goes to the sender's own account; "
-					+ "otherwise it goes to the user owning recipientDocument and the sender's daily limit applies (CPF: R$ 10,000, CNPJ: R$ 50,000). Atomic: any failure rolls everything back.")
+					+ "otherwise it goes to the user owning recipientDocument (PF and PJ can send to each other). Either way the amount counts toward the sender's daily limit (CPF: R$ 10,000, CNPJ: R$ 50,000). Atomic: any failure rolls everything back.")
 	@ApiResponse(responseCode = "200", description = "Remittance completed")
 	@ApiResponse(responseCode = "400", description = "Invalid payload or recipient document",
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))

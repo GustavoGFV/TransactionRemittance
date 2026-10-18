@@ -65,17 +65,20 @@ class RemittanceTransactionServiceTest {
 	}
 
 	@Test
-	void buyOnSameAccountConvertsWithoutTouchingDailyLimit() {
+	void buyOnSameAccountConvertsAndAlsoCountsTowardDailyLimit() {
 		User sender = user(CPF, "1000.00", "0.00");
 		when(userRepository.lockAllByPublicIdIn(any())).thenReturn(List.of(sender));
+		when(dailyRepository.findByUserIdAndTransactionDate(sender.getPublicId(), TODAY)).thenReturn(Optional.empty());
+		when(ruleRepository.findByDocumentType(DocumentType.CPF)).thenReturn(Optional.of(rule(DocumentType.CPF, "10000.00")));
+		when(dailyRepository.save(any(UserDailyTransaction.class))).thenAnswer(i -> i.getArgument(0));
 
 		RemittanceResponse response = service.buy(buy(sender, "500.00", true, null), RATE);
 
 		assertThat(response.amountUsd()).isEqualByComparingTo("100.00");
 		assertThat(sender.getBalanceBrl()).isEqualByComparingTo("500.00");
 		assertThat(sender.getBalanceUsd()).isEqualByComparingTo("100.00");
-		assertThat(response.dailyLimit()).isNull();
-		verify(dailyRepository, never()).save(any());
+		assertThat(response.dailyReachedAmount()).isEqualByComparingTo("500.00");
+		assertThat(response.dailyLimit()).isEqualByComparingTo("10000.00");
 	}
 
 	@Test
@@ -110,7 +113,7 @@ class RemittanceTransactionServiceTest {
 
 		assertThatThrownBy(() -> service.buy(buy(sender, "500.01", false, CNPJ), RATE))
 				.isInstanceOf(DailyLimitExceededException.class);
-		assertThat(sender.getBalanceBrl()).isEqualByComparingTo("20000.00");
+		// The in-memory debit is discarded by the transaction rollback (covered in RemittanceFlowIT)
 		assertThat(used.getReachedAmount()).isEqualByComparingTo("9500.00");
 		verify(dailyRepository, never()).save(any());
 	}
@@ -164,6 +167,9 @@ class RemittanceTransactionServiceTest {
 	void buyRoundsUsdDown() {
 		User sender = user(CPF, "100.00", "0.00");
 		when(userRepository.lockAllByPublicIdIn(any())).thenReturn(List.of(sender));
+		when(dailyRepository.findByUserIdAndTransactionDate(sender.getPublicId(), TODAY)).thenReturn(Optional.empty());
+		when(ruleRepository.findByDocumentType(DocumentType.CPF)).thenReturn(Optional.of(rule(DocumentType.CPF, "10000.00")));
+		when(dailyRepository.save(any(UserDailyTransaction.class))).thenAnswer(i -> i.getArgument(0));
 
 		RemittanceResponse response = service.buy(buy(sender, "10.00", true, null), new BigDecimal("5.2073"));
 
@@ -197,7 +203,7 @@ class RemittanceTransactionServiceTest {
 	}
 
 	private static User user(String document, String brl, String usd) {
-		return new User("Test", document + "@mail.com", document, new BigDecimal(brl), new BigDecimal(usd));
+		return new User("Test", document + "@mail.com", document, "hash", new BigDecimal(brl), new BigDecimal(usd));
 	}
 
 	private static DailyLimitRule rule(DocumentType type, String max) {
