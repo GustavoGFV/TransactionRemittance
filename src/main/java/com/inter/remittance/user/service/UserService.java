@@ -47,7 +47,7 @@ public class UserService {
 			return repository.saveAndFlush(user);
 		}
 		catch (DataIntegrityViolationException ex) {
-			// If a DataIntegrityViolationException occurs, it means another request has inserted a user with the same email or document concurrently.
+			// The existence check above is not atomic; the unique constraints are the actual guarantee against concurrent duplicates.
 			throw new DuplicateUserException("email or document");
 		}
 	}

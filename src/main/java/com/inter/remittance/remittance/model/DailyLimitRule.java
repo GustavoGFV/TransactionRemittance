@@ -13,7 +13,9 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-// Daily limit per document type: CPF (individual, PF) and CNPJ (company, PJ)
+/**
+ * Maximum amount, in BRL, that a user of a given document type (CPF/CNPJ) may send per day in external transfers.
+ */
 @Entity
 @Table(name = "daily_limit_rules")
 public class DailyLimitRule {

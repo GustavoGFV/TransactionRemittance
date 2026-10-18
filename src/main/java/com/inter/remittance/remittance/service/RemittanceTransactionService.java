@@ -70,9 +70,9 @@ public class RemittanceTransactionService {
 	}
 
 	/**
-	 * Executes a buy remittance transaction. This method handles the entire process of debiting the sender,
-	 * crediting the beneficiary, and registering the daily usage if applicable. It ensures that all operations
-	 * are performed within a single ACID transaction.
+	 * Debits the sender's BRL and credits USD to the beneficiary. 
+	 * Only external transfers consume the daily limit.
+	 * Rows are locked in id order, which prevents deadlocks between concurrent transfers in opposite directions.
 	 */
 	@Transactional
 	public RemittanceResponse buy(BuyRemittanceRequest request, BigDecimal quotation) {
@@ -101,9 +101,9 @@ public class RemittanceTransactionService {
 	}
 
 	/**
-	 * Executes a reverse remittance transaction. This method handles the entire process of debiting the sender
-	 * and crediting the sender's account with the equivalent amount in BRL. It ensures that all operations
-	 * are performed within a single ACID transaction.
+	 * Converts USD back to BRL inside the user's own account. 
+	 * The BRL amount is rounded down, so rounding never benefits the customer.
+	 * It does not count toward the daily limit.
 	 */
 	@Transactional
 	public RemittanceResponse reverse(ReverseRemittanceRequest request, BigDecimal quotation) {
@@ -123,8 +123,9 @@ public class RemittanceTransactionService {
 	}
 
 	/**
-	 * Resolves the recipient of a buy remittance request. This method checks if the recipient document is provided,
-	 * normalizes it, and retrieves the corresponding user. It also ensures that the recipient is not the same as the sender.
+	 * Resolves the user that owns the recipient document.
+	 * A recipient equal to the sender is rejected, since that scenario is covered by isSameAccount=true
+	 * and is not subject to the daily limit.
 	 */
 	private UUID resolveRecipient(BuyRemittanceRequest request) {
 		if (request.recipientDocument() == null || request.recipientDocument().isBlank()) {
@@ -139,8 +140,8 @@ public class RemittanceTransactionService {
 	}
 
 	/**
-	 * Registers the daily usage of a sender for a buy remittance transaction. This method retrieves or creates
-	 * the daily transaction record for the sender, updates it with the current transaction amount, and saves it.
+	 * Adds the amount to today's counter of the sender (Brasília date), creating the row on first use.
+	 * The sender row is already locked at this point, which serializes concurrent transfers and keeps the limit check consistent.
 	 */
 	private UserDailyTransaction registerDailyUsage(User sender, BigDecimal amountBrl) {
 		LocalDate today = LocalDate.now(clock);

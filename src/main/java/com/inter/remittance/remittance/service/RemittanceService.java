@@ -23,9 +23,6 @@ import com.inter.remittance.remittance.dto.ReverseRemittanceRequest;
 /**
  * Orchestrates the {@code quotation} and {@code user} packages. Work runs on virtual threads and the
  * quotation is resolved first (outside any transaction); only then the short DB transaction is opened.
- * This service handles remittance operations, including balance inquiries, previews, purchases, and reversals.
- * Provides asynchronous methods for interacting with the remittance system.
- * All operations are performed asynchronously to improve responsiveness and scalability.
  * @see QuotationService
  * @see RemittanceTransactionService
  */
@@ -52,7 +49,8 @@ public class RemittanceService {
 	}
 
 	/**
-	 * Endpoint to preview a remittance transaction for a specific user and amount in USD.
+	 * Calculates the BRL cost of a USD amount at the current quotation. 
+	 * Read-only.
 	 * 
 	 * @param userId the ID of the user
 	 * @param amountUsd the amount in USD to preview
@@ -74,9 +72,10 @@ public class RemittanceService {
 	}
 
 	/**
-	 * Retrieves the current buy quotation for the day.
-	 * 
-	 * @return a CompletableFuture containing the latest buy quotation
+	 * Latest buy quotation of the day; 
+	 * the BCB publishes several bulletins per day and the last one is the closing quotation.
+	 *
+	 * @return the latest buy quotation
 	 */
 	private CompletableFuture<BigDecimal> currentBuyQuotation() {
 		return quotationService.findBuyQuotations(LocalDate.now(clock))

@@ -15,6 +15,13 @@ import com.inter.remittance.quotation.dto.BuyQuotation;
 import com.inter.remittance.quotation.exception.QuotationNotFoundException;
 import com.inter.remittance.quotation.mapper.QuotationMapper;
 
+/**
+ * Fetches the BCB PTAX buy quotation (cotacaoCompra).
+ * 
+ * The BCB publishes nothing on weekends and holidays, so the lookup walks back to the last business day.
+ * Saturday and Sunday are resolved directly to the previous Friday; the bounded retry only covers holidays.
+ * Calls run on virtual threads, so waiting on the BCB does not block a platform thread.
+ */
 @Service
 public class QuotationService {
 

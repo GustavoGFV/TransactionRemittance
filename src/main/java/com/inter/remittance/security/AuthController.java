@@ -25,7 +25,7 @@ public class AuthController {
 	}
 
 	/**
-	 * Endpoint to issue an access token using API client credentials.
+	 * Issues a JWT in exchange for the API client credentials.
 	 * @param request the token request containing client credentials
 	 * @return the token response containing the signed JWT
 	 */

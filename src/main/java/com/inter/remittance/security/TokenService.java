@@ -12,6 +12,12 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 
+/**
+ * Issues a short-lived JWT in exchange for valid API client credentials.
+ * 
+ * There is no end-user login in this service, so the token only proves the caller is a trusted client.
+ * It is deliberately not bound to a user id.
+ */
 @Service
 public class TokenService {
 
@@ -42,7 +48,8 @@ public class TokenService {
 		return new TokenResponse(token, "Bearer", properties.jwt().ttl().toSeconds());
 	}
 
-	// Constant-time comparison; non-short-circuit "|" above keeps both checks timing-uniform
+	// Both checks always run and the comparison is constant-time; otherwise the response time
+	// would reveal whether the clientId or the secret was the wrong one.
 	private static boolean matches(String provided, String expected) {
 		return MessageDigest.isEqual(provided.getBytes(StandardCharsets.UTF_8), expected.getBytes(StandardCharsets.UTF_8));
 	}

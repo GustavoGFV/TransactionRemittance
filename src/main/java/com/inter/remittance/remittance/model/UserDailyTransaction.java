@@ -20,7 +20,10 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
-// Tracks how much of the daily limit a user has already used (one row per user per day)
+/**
+ * Running total, in BRL, sent by a user on a given day. 
+ * One row per user and date, used to enforce the daily limit.
+ */
 @Entity
 @Table(name = "user_daily_transactions")
 public class UserDailyTransaction {
