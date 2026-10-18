@@ -107,6 +107,12 @@ public class RemittanceController {
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
 	@ApiResponse(responseCode = "503", description = "BCB API unavailable",
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
+	@io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Sender, BRL amount and destination. recipientDocument is mandatory only when isSameAccount is false.",
+			required = true, content = @Content(examples = {
+					@io.swagger.v3.oas.annotations.media.ExampleObject(name = "Same account",
+							value = "{\"userId\":\"3f2b8c1e-6a4d-4f7e-9b1a-2c5d7e8f9a0b\",\"amountBrl\":500.00,\"isSameAccount\":true}"),
+					@io.swagger.v3.oas.annotations.media.ExampleObject(name = "External transfer",
+							value = "{\"userId\":\"3f2b8c1e-6a4d-4f7e-9b1a-2c5d7e8f9a0b\",\"amountBrl\":500.00,\"isSameAccount\":false,\"recipientDocument\":\"11.222.333/0001-81\"}")}))
 	public CompletableFuture<RemittanceResponse> buy(@Valid @RequestBody BuyRemittanceRequest request) {
 		return remittanceService.buy(request);
 	}
@@ -129,6 +135,9 @@ public class RemittanceController {
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
 	@ApiResponse(responseCode = "503", description = "BCB API unavailable",
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
+	@io.swagger.v3.oas.annotations.parameters.RequestBody(description = "User and USD amount to convert; both fields are mandatory.", required = true,
+			content = @Content(examples = @io.swagger.v3.oas.annotations.media.ExampleObject(
+					value = "{\"userId\":\"3f2b8c1e-6a4d-4f7e-9b1a-2c5d7e8f9a0b\",\"amountUsd\":100.00}")))
 	public CompletableFuture<RemittanceResponse> reverse(@Valid @RequestBody ReverseRemittanceRequest request) {
 		return remittanceService.reverse(request);
 	}
