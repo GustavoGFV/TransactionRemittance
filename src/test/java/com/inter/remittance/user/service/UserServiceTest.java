@@ -76,7 +76,7 @@ class UserServiceTest {
 	@Test
 	void findByIdThrowsWhenMissing() {
 		UUID id = UUID.randomUUID();
-		when(repository.findById(id)).thenReturn(Optional.empty());
+		when(repository.findByPublicId(id)).thenReturn(Optional.empty());
 
 		assertThatThrownBy(() -> service.findById(id)).isInstanceOf(UserNotFoundException.class);
 	}
@@ -84,8 +84,8 @@ class UserServiceTest {
 	@Test
 	void updateRejectsEmailUsedByAnotherUser() {
 		UUID id = UUID.randomUUID();
-		when(repository.findById(id)).thenReturn(Optional.of(new User("A", "a@mail.com", "52998224725", BigDecimal.ZERO, BigDecimal.ZERO)));
-		when(repository.existsByEmailAndIdNot("b@mail.com", id)).thenReturn(true);
+		when(repository.findByPublicId(id)).thenReturn(Optional.of(new User("A", "a@mail.com", "52998224725", BigDecimal.ZERO, BigDecimal.ZERO)));
+		when(repository.existsByEmailAndPublicIdNot("b@mail.com", id)).thenReturn(true);
 
 		assertThatThrownBy(() -> service.update(id, new UpdateUserRequest("A", "B@mail.com")))
 				.isInstanceOf(DuplicateUserException.class);
@@ -94,10 +94,10 @@ class UserServiceTest {
 	@Test
 	void deleteThrowsWhenMissing() {
 		UUID id = UUID.randomUUID();
-		when(repository.existsById(id)).thenReturn(false);
+		when(repository.existsByPublicId(id)).thenReturn(false);
 
 		assertThatThrownBy(() -> service.delete(id)).isInstanceOf(UserNotFoundException.class);
-		verify(repository, never()).deleteById(any());
+		verify(repository, never()).deleteByPublicId(any());
 	}
 
 }

@@ -52,7 +52,7 @@ public class UserService {
 
 	@Transactional(readOnly = true)
 	public User findById(UUID id) {
-		return repository.findById(id).orElseThrow(() -> new UserNotFoundException(id));
+		return repository.findByPublicId(id).orElseThrow(() -> new UserNotFoundException(id));
 	}
 
 	@Transactional(readOnly = true)
@@ -65,7 +65,7 @@ public class UserService {
 		User user = findById(id);
 		String email = normalizeEmail(request.email());
 
-		if (repository.existsByEmailAndIdNot(email, id)) {
+		if (repository.existsByEmailAndPublicIdNot(email, id)) {
 			throw new DuplicateUserException("email");
 		}
 
@@ -80,10 +80,10 @@ public class UserService {
 
 	@Transactional
 	public void delete(UUID id) {
-		if (!repository.existsById(id)) {
+		if (!repository.existsByPublicId(id)) {
 			throw new UserNotFoundException(id);
 		}
-		repository.deleteById(id);
+		repository.deleteByPublicId(id);
 	}
 
 	private static String normalizeEmail(String email) {

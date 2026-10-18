@@ -1,17 +1,24 @@
 package com.inter.remittance.user.repository;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.inter.remittance.user.model.User;
 
-public interface UserRepository extends JpaRepository<User, UUID> {
+public interface UserRepository extends JpaRepository<User, Long> {
 
 	boolean existsByEmail(String email);
 
 	boolean existsByDocument(String document);
 
-	boolean existsByEmailAndIdNot(String email, UUID id);
+	boolean existsByEmailAndPublicIdNot(String email, UUID publicId);
+
+	Optional<User> findByPublicId(UUID publicId);
+
+	boolean existsByPublicId(UUID publicId);
+
+	void deleteByPublicId(UUID publicId);
 
 }

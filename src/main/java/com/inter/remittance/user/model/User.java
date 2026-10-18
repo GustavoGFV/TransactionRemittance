@@ -21,8 +21,12 @@ import jakarta.persistence.Version;
 public class User {
 
 	@Id
-	@GeneratedValue(strategy = GenerationType.UUID)
-	private UUID id;
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
+
+	// Identifier exposed by the API; the sequential id never leaves the database
+	@Column(name = "public_id", nullable = false, updatable = false, unique = true)
+	private UUID publicId;
 
 	@Column(nullable = false, length = 150)
 	private String name;
@@ -53,6 +57,7 @@ public class User {
 	}
 
 	public User(String name, String email, String document, BigDecimal balanceBrl, BigDecimal balanceUsd) {
+		this.publicId = UUID.randomUUID();
 		this.name = name;
 		this.email = email;
 		this.document = document;
@@ -80,8 +85,12 @@ public class User {
 		return Documents.typeOf(document);
 	}
 
-	public UUID getId() {
+	public Long getId() {
 		return id;
+	}
+
+	public UUID getPublicId() {
+		return publicId;
 	}
 
 	public String getName() {
