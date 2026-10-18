@@ -55,6 +55,11 @@ public class UserController {
 		this.mapper = mapper;
 	}
 
+	/**
+	 * Endpoint to create a new user.
+	 * @param request the create user request containing user details
+	 * @return the created user response with public UUID
+	 */
 	@PostMapping
 	@Operation(summary = "Create a user",
 			description = "Registers a person (CPF) or company (CNPJ). Document and email must be valid and unique. "
@@ -70,6 +75,11 @@ public class UserController {
 		return ResponseEntity.created(location).body(created);
 	}
 
+	/**
+	 * Endpoint to get a user by its public UUID.
+	 * @param id the public user id (UUID)
+	 * @return the user response with public UUID
+	 */
 	@GetMapping("/{id}")
 	@Operation(summary = "Get a user by id", description = "Returns the user identified by its public UUID")
 	@ApiResponse(responseCode = "200", description = "User found")
@@ -82,6 +92,17 @@ public class UserController {
 		return mapper.toResponse(userService.findById(id));
 	}
 
+	/**
+	 * Endpoint to list users with optional filters and pagination.
+	 * @param name filter by part of the name (optional)
+	 * @param email filter by part of the email (optional)
+	 * @param documentType filter by document type (optional)
+	 * @param page zero-based page index (optional, default 0)
+	 * @param size page size (optional, default 20)
+	 * @param sortBy property used to sort the results (optional, default "createdAt")
+	 * @param direction sort direction (optional, default "ASC")
+	 * @return a paginated list of users matching the filters
+	 */
 	@GetMapping
 	@Operation(summary = "List users",
 			description = "Paginated list. All filters are optional and combined with AND; "
@@ -108,6 +129,12 @@ public class UserController {
 		return PageResponse.from(userService.findAll(new UserFilter(name, email, documentType), pageable), mapper::toResponse);
 	}
 
+	/**
+	 * Endpoint to update a user's name and email.
+	 * @param id the public user id (UUID)
+	 * @param request the update user request containing new name and email
+	 * @return the updated user response with public UUID
+	 */
 	@PutMapping("/{id}")
 	@Operation(summary = "Update name and email",
 			description = "The document is immutable and balances change only through transactions")
@@ -126,6 +153,11 @@ public class UserController {
 		return mapper.toResponse(userService.update(id, request));
 	}
 
+	/**
+	 * Endpoint to delete a user by its public UUID.
+	 * @param id the public user id (UUID)
+	 * @return a response entity with no content if the deletion is successful
+	 */
 	@DeleteMapping("/{id}")
 	@Operation(summary = "Delete a user", description = "Permanently removes the user")
 	@ApiResponse(responseCode = "204", description = "User deleted")

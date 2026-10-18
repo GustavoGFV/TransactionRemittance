@@ -13,11 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 import com.inter.remittance.user.dto.CreateUserRequest;
 import com.inter.remittance.user.dto.UpdateUserRequest;
 import com.inter.remittance.user.dto.UserFilter;
-import com.inter.remittance.user.repository.UserSpecifications;
 import com.inter.remittance.user.exception.DuplicateUserException;
 import com.inter.remittance.user.exception.UserNotFoundException;
 import com.inter.remittance.user.model.User;
 import com.inter.remittance.user.repository.UserRepository;
+import com.inter.remittance.user.repository.UserSpecifications;
 import com.inter.remittance.user.validation.Documents;
 
 @Service
@@ -47,7 +47,7 @@ public class UserService {
 			return repository.saveAndFlush(user);
 		}
 		catch (DataIntegrityViolationException ex) {
-			// Two concurrent requests can both pass the checks above; the unique constraints are the real guard
+			// If a DataIntegrityViolationException occurs, it means another request has inserted a user with the same email or document concurrently.
 			throw new DuplicateUserException("email or document");
 		}
 	}

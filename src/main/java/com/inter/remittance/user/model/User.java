@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+import com.inter.remittance.user.exception.InsufficientBalanceException;
 import com.inter.remittance.user.validation.Documents;
 
 import jakarta.persistence.Column;
@@ -79,6 +80,28 @@ public class User {
 	public void changeProfile(String name, String email) {
 		this.name = name;
 		this.email = email;
+	}
+
+	public void debitBrl(BigDecimal amount) {
+		if (balanceBrl.compareTo(amount) < 0) {
+			throw new InsufficientBalanceException("BRL", balanceBrl, amount);
+		}
+		balanceBrl = balanceBrl.subtract(amount);
+	}
+
+	public void creditBrl(BigDecimal amount) {
+		balanceBrl = balanceBrl.add(amount);
+	}
+
+	public void debitUsd(BigDecimal amount) {
+		if (balanceUsd.compareTo(amount) < 0) {
+			throw new InsufficientBalanceException("USD", balanceUsd, amount);
+		}
+		balanceUsd = balanceUsd.subtract(amount);
+	}
+
+	public void creditUsd(BigDecimal amount) {
+		balanceUsd = balanceUsd.add(amount);
 	}
 
 	public DocumentType getDocumentType() {
