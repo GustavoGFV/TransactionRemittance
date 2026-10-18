@@ -12,6 +12,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.inter.remittance.user.dto.CreateUserRequest;
 import com.inter.remittance.user.dto.UpdateUserRequest;
+import com.inter.remittance.user.dto.UserFilter;
+import com.inter.remittance.user.repository.UserSpecifications;
 import com.inter.remittance.user.exception.DuplicateUserException;
 import com.inter.remittance.user.exception.UserNotFoundException;
 import com.inter.remittance.user.model.User;
@@ -56,8 +58,8 @@ public class UserService {
 	}
 
 	@Transactional(readOnly = true)
-	public Page<User> findAll(Pageable pageable) {
-		return repository.findAll(pageable);
+	public Page<User> findAll(UserFilter filter, Pageable pageable) {
+		return repository.findAll(UserSpecifications.from(filter), pageable);
 	}
 
 	@Transactional
