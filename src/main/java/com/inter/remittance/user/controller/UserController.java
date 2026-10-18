@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,6 +35,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -42,6 +45,7 @@ import jakarta.validation.constraints.Size;
 
 @RestController
 @RequestMapping("/users")
+@SecurityRequirement(name = "bearerAuth")
 @Tag(name = "User", description = "User management (CPF/CNPJ) with BRL and USD balances")
 public class UserController {
 
@@ -60,6 +64,7 @@ public class UserController {
 	 * @param request the create user request containing user details
 	 * @return the created user response with public UUID
 	 */
+	@SecurityRequirements // public sign-up: no token required
 	@PostMapping
 	@Operation(summary = "Create a user",
 			description = "Registers a person (CPF) or company (CNPJ). Document and email must be valid and unique and the password is stored as a BCrypt hash. "
@@ -80,6 +85,8 @@ public class UserController {
 	 * @param id the public user id (UUID)
 	 * @return the user response with public UUID
 	 */
+	@ApiResponse(responseCode = "403", description = "Requires an ADMIN token or the USER token of this same user", content = @Content)
+	@PreAuthorize("hasRole('ADMIN') or #id.toString() == authentication.name")
 	@GetMapping("/{id}")
 	@Operation(summary = "Get a user by id", description = "Returns the user identified by its public UUID")
 	@ApiResponse(responseCode = "200", description = "User found")
@@ -103,6 +110,8 @@ public class UserController {
 	 * @param direction sort direction (optional, default "ASC")
 	 * @return a paginated list of users matching the filters
 	 */
+	@ApiResponse(responseCode = "403", description = "Requires an ADMIN token (POST /auth/token)", content = @Content)
+	@PreAuthorize("hasRole('ADMIN')")
 	@GetMapping
 	@Operation(summary = "List users",
 			description = "Paginated list. All filters are optional and combined with AND; "
@@ -135,6 +144,8 @@ public class UserController {
 	 * @param request the update user request containing new name and email
 	 * @return the updated user response with public UUID
 	 */
+	@ApiResponse(responseCode = "403", description = "Requires an ADMIN token or the USER token of this same user", content = @Content)
+	@PreAuthorize("hasRole('ADMIN') or #id.toString() == authentication.name")
 	@PutMapping("/{id}")
 	@Operation(summary = "Update name and email",
 			description = "The document is immutable and balances change only through transactions")
@@ -158,6 +169,8 @@ public class UserController {
 	 * @param id the public user id (UUID)
 	 * @return a response entity with no content if the deletion is successful
 	 */
+	@ApiResponse(responseCode = "403", description = "Requires an ADMIN token or the USER token of this same user", content = @Content)
+	@PreAuthorize("hasRole('ADMIN') or #id.toString() == authentication.name")
 	@DeleteMapping("/{id}")
 	@Operation(summary = "Delete a user", description = "Permanently removes the user")
 	@ApiResponse(responseCode = "204", description = "User deleted")

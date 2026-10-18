@@ -9,7 +9,9 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,6 +27,7 @@ import com.nimbusds.jose.jwk.source.ImmutableSecret;
 
 @Configuration
 @EnableConfigurationProperties(SecurityProperties.class)
+@EnableMethodSecurity
 public class SecurityConfig {
 
 	@Bean
@@ -33,12 +36,22 @@ public class SecurityConfig {
 				.csrf(csrf -> csrf.disable())
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(auth -> auth
-						.requestMatchers(HttpMethod.POST, "/auth/token").permitAll()
+						.requestMatchers(HttpMethod.POST, "/auth/token", "/auth/login", "/users").permitAll()
 						.requestMatchers("/actuator/health/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 						.requestMatchers(HttpMethod.GET, "/quotations/**").permitAll()
 						.anyRequest().authenticated())
-				.oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+				.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
 				.build();
+	}
+
+	// Maps the "roles" claim to ROLE_ADMIN / ROLE_USER authorities
+	private static JwtAuthenticationConverter jwtAuthenticationConverter() {
+		JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
+		authorities.setAuthoritiesClaimName(TokenService.ROLES_CLAIM);
+		authorities.setAuthorityPrefix("ROLE_");
+		JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+		converter.setJwtGrantedAuthoritiesConverter(authorities);
+		return converter;
 	}
 
 	@Bean

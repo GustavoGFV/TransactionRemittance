@@ -17,6 +17,8 @@ import com.inter.remittance.user.model.User;
 
 public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
 
+	Optional<User> findByEmail(String email);
+
 	boolean existsByEmail(String email);
 
 	boolean existsByDocument(String document);

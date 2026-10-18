@@ -138,6 +138,10 @@ public class User {
 		return document;
 	}
 
+	public String getPasswordHash() {
+		return passwordHash;
+	}
+
 	public BigDecimal getBalanceBrl() {
 		return balanceBrl;
 	}
