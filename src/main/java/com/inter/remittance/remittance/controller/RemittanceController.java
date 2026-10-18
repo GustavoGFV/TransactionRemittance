@@ -8,6 +8,7 @@ import com.inter.remittance.remittance.model.Remittance;
 import com.inter.remittance.remittance.service.RemittanceService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 
@@ -24,7 +25,9 @@ public class RemittanceController {
 
     
     @GetMapping
-    @Operation(summary = "Get all remittances", description = "Retrieve a list of all remittances")
+    @Operation(summary = "Get all remittances",
+            description = "Retrieve a list of all remittances. Placeholder: returns an empty list until the remittance flow is implemented")
+    @ApiResponse(responseCode = "200", description = "List of remittances (currently empty)")
     public ResponseEntity<List<Remittance>> getAllRemittances() {
         return ResponseEntity.ok(remittanceService.getAllRemittances());
     }   
