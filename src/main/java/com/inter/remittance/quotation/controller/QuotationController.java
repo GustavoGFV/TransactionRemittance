@@ -1,15 +1,19 @@
 package com.inter.remittance.quotation.controller;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.inter.remittance.quotation.dto.BuyQuotation;
 import com.inter.remittance.quotation.service.QuotationService;
@@ -25,6 +29,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RequestMapping("/quotations")
 @Tag(name = "Quotation", description = "Dollar quotations from the BCB PTAX API")
 public class QuotationController {
+
+	private static final DateTimeFormatter BCB_DATE = DateTimeFormatter.ofPattern("MM-dd-uuuu").withResolverStyle(ResolverStyle.STRICT);
 
 	private final QuotationService quotationService;
 
@@ -50,9 +56,24 @@ public class QuotationController {
 	@ApiResponse(responseCode = "503", description = "BCB API unavailable (circuit breaker open or retries exhausted)",
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
 	public CompletableFuture<List<BuyQuotation>> getBuyQuotations(
-			@Parameter(description = "Quotation date in ISO format (yyyy-MM-dd)", required = true, example = "2026-10-01")
-			@RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-		return quotationService.findBuyQuotations(date);
+			@Parameter(description = "Quotation date in the BCB OData format MM-dd-yyyy, wrapped in single quotes (the quotes are optional)",
+					required = true, example = "'10-01-2026'")
+			@RequestParam("date") String date) {
+		return quotationService.findBuyQuotations(parseBcbDate(date));
+	}
+
+	// BCB style: '10-01-2026' (single quotes); the quotes are optional, any other format is rejected
+	private static LocalDate parseBcbDate(String value) {
+		String raw = value.strip();
+		if (raw.length() > 1 && raw.startsWith("'") && raw.endsWith("'")) {
+			raw = raw.substring(1, raw.length() - 1);
+		}
+		try {
+			return LocalDate.parse(raw, BCB_DATE);
+		}
+		catch (DateTimeParseException e) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid date, expected 'MM-dd-yyyy' with single quotes");
+		}
 	}
 
 }
