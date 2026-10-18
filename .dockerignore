@@ -1,0 +1,10 @@
+target/
+.git/
+.github/
+.vscode/
+.mvn/wrapper/maven-wrapper.jar
+k8s/
+*.log
+*.err
+.env
+HELP.md

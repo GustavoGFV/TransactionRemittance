@@ -1,10 +1,41 @@
 services:
   postgres:
     image: postgres:17-alpine
+    container_name: remittance-postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: remittance
-      POSTGRES_USER: remittance
-      POSTGRES_PASSWORD: remittance
+      POSTGRES_DB: ${POSTGRES_DB:-remittance}
+      POSTGRES_USER: ${POSTGRES_USER:-remittance}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-remittance}
     ports:
-      - '5432:5432'
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Only started with: docker compose --profile app up --build
+  # (the profile keeps Spring Boot's docker-compose support from starting it during local development)
+  app:
+    profiles: ["app"]
+    build: .
+    container_name: remittance-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-remittance}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-remittance}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-remittance}
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+    ports:
+      - "8080:8080"
+    mem_limit: 768m
+
+volumes:
+  postgres-data:
 
