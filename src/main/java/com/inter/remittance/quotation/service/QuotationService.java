@@ -7,9 +7,14 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 
 import com.inter.remittance.quotation.client.BcbPtaxClient;
 import com.inter.remittance.quotation.config.QuotationCacheConfig;
@@ -23,10 +28,13 @@ import com.inter.remittance.quotation.mapper.QuotationMapper;
  * The BCB publishes nothing on weekends and holidays, so the lookup walks back to the last business day.
  * Saturday and Sunday are resolved directly to the previous Friday; the bounded retry only covers holidays.
  * Calls run on virtual threads, so waiting on the BCB does not block a platform thread.
+ * If the BCB fails, the last known good quotation is served (stale-if-error) and counted in the
+ * {@code quotation.stale.served} metric.
  */
 @Service
 public class QuotationService {
 
+	private static final Logger log = LoggerFactory.getLogger(QuotationService.class);
 	private static final DateTimeFormatter BCB_DATE = DateTimeFormatter.ofPattern("MM-dd-yyyy");
 	private static final String JSON_FORMAT = "json";
 	private static final int MAX_BUSINESS_DAY_ATTEMPTS = 5;
@@ -34,21 +42,43 @@ public class QuotationService {
 	private final BcbPtaxClient client;
 	private final QuotationMapper mapper;
 	private final Executor executor;
+	private final LastKnownQuotationStore lastKnown;
+	private final Counter staleServed;
 
 	public QuotationService(BcbPtaxClient client, QuotationMapper mapper,
-			@Qualifier("quotationExecutor") Executor executor) {
+			@Qualifier("quotationExecutor") Executor executor, LastKnownQuotationStore lastKnown,
+			MeterRegistry meterRegistry) {
 		this.client = client;
 		this.mapper = mapper;
 		this.executor = executor;
+		this.lastKnown = lastKnown;
+		this.staleServed = meterRegistry.counter("quotation.stale.served");
 	}
 
 	/**
 	 * Cached by date: the rate moves a few times a day at most, so repeated remittances do not hit the BCB.
+	 * {@code sync = true} makes concurrent misses share a single BCB call (no cache stampede).
 	 * Failed lookups are never cached (a failed future is not stored), so an outage does not outlive itself.
 	 */
-	@Cacheable(cacheNames = QuotationCacheConfig.QUOTATIONS_CACHE, key = "#date")
+	@Cacheable(cacheNames = QuotationCacheConfig.QUOTATIONS_CACHE, key = "#date", sync = true)
 	public CompletableFuture<List<BuyQuotation>> findBuyQuotations(LocalDate date) {
-		return CompletableFuture.supplyAsync(() -> findOnLastBusinessDay(date), executor);
+		return CompletableFuture.supplyAsync(() -> findWithFallback(date), executor);
+	}
+
+	private List<BuyQuotation> findWithFallback(LocalDate date) {
+		try {
+			List<BuyQuotation> quotations = findOnLastBusinessDay(date);
+			lastKnown.remember(quotations);
+			return quotations;
+		} catch (QuotationNotFoundException e) {
+			throw e;
+		} catch (RuntimeException e) {
+			return lastKnown.recall().map(stale -> {
+				staleServed.increment();
+				log.warn("BCB unavailable ({}); serving the last known quotation", e.toString());
+				return stale;
+			}).orElseThrow(() -> e);
+		}
 	}
 
 	/**

@@ -13,6 +13,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.time.Clock;
+import java.time.Duration;
 import java.util.concurrent.ExecutionException;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +23,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import com.inter.remittance.quotation.client.BcbPtaxClient;
 import com.inter.remittance.quotation.client.dto.BcbQuotationItem;
@@ -38,11 +42,14 @@ class QuotationServiceTest {
 
 	private BcbPtaxClient client;
 	private QuotationService service;
+	private SimpleMeterRegistry meters;
 
 	@BeforeEach
 	void setUp() {
 		client = mock(BcbPtaxClient.class);
-		service = new QuotationService(client, Mappers.getMapper(QuotationMapper.class), Runnable::run);
+		meters = new SimpleMeterRegistry();
+		service = new QuotationService(client, Mappers.getMapper(QuotationMapper.class), Runnable::run,
+				new LastKnownQuotationStore(Duration.ofHours(24), Clock.systemUTC()), meters);
 	}
 
 	@ParameterizedTest
@@ -95,8 +102,46 @@ class QuotationServiceTest {
 				.containsEntry("@dataCotacao", "'10-16-2026'");
 	}
 
-	private List<String> requestedDates() {
-		return captureParams().stream().map(params -> params.get("@dataCotacao")).toList();
+	/*
+	 * Stale-if-error (BCB outage):
+	 *  1. a successful lookup is remembered as the last known quotation;
+	 *  2. when the BCB then fails, that quotation is served and quotation.stale.served is incremented;
+	 *  3. with nothing remembered, the original failure is propagated (no invented rate);
+	 *  4. "no quotation found" is a business answer from a healthy BCB and is never masked by stale data.
+	 */
+	@Test
+	void servesTheLastKnownQuotationWhenTheBcbFails() throws Exception {
+		when(client.findDollarQuotationByDay(anyMap())).thenReturn(WITH_QUOTATION)
+				.thenThrow(new IllegalStateException("BCB down"));
+		service.findBuyQuotations(LocalDate.of(2026, 10, 16)).get();
+
+		List<BuyQuotation> stale = service.findBuyQuotations(LocalDate.of(2026, 10, 15)).get();
+
+		assertThat(stale).extracting(BuyQuotation::cotacaoCompra).containsExactly(new BigDecimal("5.0123"));
+		assertThat(meters.counter("quotation.stale.served").count()).isEqualTo(1.0);
+	}
+
+	@Test
+	void propagatesTheFailureWhenThereIsNoLastKnownQuotation() {
+		when(client.findDollarQuotationByDay(anyMap())).thenThrow(new IllegalStateException("BCB down"));
+
+		assertThatThrownBy(() -> service.findBuyQuotations(LocalDate.of(2026, 10, 16)).get())
+				.isInstanceOf(ExecutionException.class)
+				.hasRootCauseInstanceOf(IllegalStateException.class);
+		assertThat(meters.counter("quotation.stale.served").count()).isZero();
+	}
+
+	@Test
+	void doesNotMaskQuotationNotFoundWithStaleData() throws Exception {
+		when(client.findDollarQuotationByDay(anyMap())).thenReturn(WITH_QUOTATION);
+		service.findBuyQuotations(LocalDate.of(2026, 10, 16)).get();
+		when(client.findDollarQuotationByDay(anyMap())).thenReturn(EMPTY);
+
+		assertThatThrownBy(() -> service.findBuyQuotations(LocalDate.of(2026, 10, 14)).get())
+				.hasCauseInstanceOf(QuotationNotFoundException.class);
+	}
+
+	private List<String> requestedDates() {		return captureParams().stream().map(params -> params.get("@dataCotacao")).toList();
 	}
 
 	@SuppressWarnings("unchecked")
