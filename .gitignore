@@ -31,3 +31,49 @@ build/
 
 ### VS Code ###
 .vscode/
+.history/
+*.code-workspace
+
+### Logs and runtime output ###
+*.log
+*.err
+logs/
+*.pid
+hs_err_pid*
+replay_pid*
+*.tmp
+*.bak
+*.swp
+
+### Environment and secrets ###
+.env
+.env.*
+!.env.example
+application-local.*
+*.pem
+*.key
+*.p12
+*.jks
+
+### OS ###
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+### Tooling and AI assistants ###
+.github/modernize/
+.copilot/
+.factorypath
+.mvn/.cache/
+dependency-reduced-pom.xml
+pom.xml.versionsBackup
+
+### Test and coverage reports ###
+coverage/
+jacoco*.exec
+*.hprof
+
+### Local data ###
+*.db
+*.sqlite
+pgdata/
