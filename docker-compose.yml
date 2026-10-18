@@ -32,6 +32,9 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-remittance}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-remittance}
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-in-real-envs-32b}
+      AUTH_CLIENT_ID: ${AUTH_CLIENT_ID:-remittance-client}
+      AUTH_CLIENT_SECRET: ${AUTH_CLIENT_SECRET:-remittance-secret}
     ports:
       - "8080:8080"
     mem_limit: 768m

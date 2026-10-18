@@ -43,6 +43,21 @@ spec:
                   key: POSTGRES_PASSWORD
             - name: SPRING_DOCKER_COMPOSE_ENABLED
               value: "false"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: remittance-app-credentials
+                  key: JWT_SECRET
+            - name: AUTH_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: remittance-app-credentials
+                  key: AUTH_CLIENT_ID
+            - name: AUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: remittance-app-credentials
+                  key: AUTH_CLIENT_SECRET
             # (pool size x replicas) must stay below PostgreSQL max_connections (100)
             - name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
               value: "20"
