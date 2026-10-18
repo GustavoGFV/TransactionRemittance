@@ -104,13 +104,14 @@ class RemittanceFlowIT {
 	}
 
 	@Test
-	void sameAccountPurchaseDoesNotConsumeTheDailyLimit() {
+	void sameAccountPurchaseAlsoCountsTowardTheDailyLimit() {
 		String token = token();
 		String user = createUserId(token, uniqueCpf(), "20000.00", "0");
 
-		assertThat(buy(token, user, "15000.00", true, null).getStatusCode()).isEqualTo(HttpStatus.OK);
+		assertThat(buy(token, user, "6000.00", true, null).getStatusCode()).isEqualTo(HttpStatus.OK);
+		assertThat(buy(token, user, "4000.01", true, null).getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
 
-		assertThat(balance(token, user)).containsEntry("balanceBrl", 5000.0).containsEntry("balanceUsd", 3000.0);
+		assertThat(balance(token, user)).containsEntry("balanceBrl", 14000.0).containsEntry("balanceUsd", 1200.0);
 	}
 
 	@Test
@@ -161,6 +162,16 @@ class RemittanceFlowIT {
 	}
 
 	@Test
+	void quotationEndpointAcceptsTheBcbDateFormatWithAndWithoutSingleQuotes() {
+		assertThat(http.get().uri("/quotations?date={d}", "'10-01-2026'").retrieve().toBodilessEntity().getStatusCode())
+				.isEqualTo(HttpStatus.OK);
+		assertThat(http.get().uri("/quotations?date={d}", "10-01-2026").retrieve().toBodilessEntity().getStatusCode())
+				.isEqualTo(HttpStatus.OK);
+		assertThat(http.get().uri("/quotations?date={d}", "2026-10-01").retrieve().toBodilessEntity().getStatusCode())
+				.isEqualTo(HttpStatus.BAD_REQUEST);
+	}
+
+	@Test
 	void bcbOutageIsReportedAsServiceUnavailableAndNotCached() {
 		String token = token();
 		String user = createUserId(token, uniqueCpf(), "0", "0");
@@ -192,7 +203,7 @@ class RemittanceFlowIT {
 			String brl, String usd) {
 		return http.post().uri("/users").headers(headers -> headers.setBearerAuth(token))
 				.contentType(MediaType.APPLICATION_JSON)
-				.body(Map.of("name", name, "email", email, "document", document,
+				.body(Map.of("name", name, "email", email, "document", document, "password", "S3nh@Forte2026",
 						"balanceBrl", new BigDecimal(brl), "balanceUsd", new BigDecimal(usd)))
 				.retrieve().toEntity(MAP);
 	}
