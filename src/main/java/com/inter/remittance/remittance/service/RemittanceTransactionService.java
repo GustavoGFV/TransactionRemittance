@@ -77,7 +77,7 @@ public class RemittanceTransactionService {
 	@Transactional
 	public RemittanceResponse buy(BuyRemittanceRequest request, BigDecimal quotation) {
 		boolean sameAccount = request.isSameAccount();
-		UUID recipientId = sameAccount ? request.userId() : resolveRecipient(request);
+		UUID recipientId = sameAccount ? request.userId() : resolveRecipient(request.userId(), request.recipientDocument());
 
 		Map<UUID, User> users = lock(Set.copyOf(List.of(request.userId(), recipientId)));
 		User sender = find(users, request.userId());
@@ -99,13 +99,17 @@ public class RemittanceTransactionService {
 	}
 
 	/**
-	 * Converts USD back to BRL inside the user's own account. 
+	 * Converts the user's USD back to BRL, credited to the user's own account or, when a recipient document is given,
+	 * to another registered user. 
 	 * The BRL amount is rounded down, so rounding never benefits the customer.
 	 * It does not count toward the daily limit.
 	 */
 	@Transactional
 	public RemittanceResponse reverse(ReverseRemittanceRequest request, BigDecimal quotation) {
-		User user = find(lock(Set.of(request.userId())), request.userId());
+		UUID recipientId = hasText(request.recipientDocument()) ? resolveRecipient(request.userId(), request.recipientDocument()) : request.userId();
+		Map<UUID, User> users = lock(Set.copyOf(List.of(request.userId(), recipientId)));
+		User user = find(users, request.userId());
+		User beneficiary = find(users, recipientId);
 
 		BigDecimal amountUsd = request.amountUsd();
 		BigDecimal amountBrl = amountUsd.multiply(quotation).setScale(MONEY_SCALE, RoundingMode.DOWN);
@@ -114,9 +118,9 @@ public class RemittanceTransactionService {
 		}
 
 		user.debitUsd(amountUsd);
-		user.creditBrl(amountBrl);
+		beneficiary.creditBrl(amountBrl);
 
-		return new RemittanceResponse(RemittanceType.REVERSE, user.getPublicId(), user.getPublicId(),
+		return new RemittanceResponse(RemittanceType.REVERSE, user.getPublicId(), beneficiary.getPublicId(),
 				amountBrl, amountUsd, quotation, user.getBalanceBrl(), user.getBalanceUsd(), null, null);
 	}
 
@@ -125,14 +129,14 @@ public class RemittanceTransactionService {
 	 * A recipient equal to the sender is rejected, since that scenario is covered by isSameAccount=true
 	 * (the daily limit applies to both).
 	 */
-	private UUID resolveRecipient(BuyRemittanceRequest request) {
-		if (request.recipientDocument() == null || request.recipientDocument().isBlank()) {
+	private UUID resolveRecipient(UUID senderId, String recipientDocument) {
+		if (!hasText(recipientDocument)) {
 			throw new InvalidRemittanceException("recipientDocument is required when isSameAccount is false");
 		}
-		User recipient = userRepository.findByDocument(Documents.normalize(request.recipientDocument()))
+		User recipient = userRepository.findByDocument(Documents.normalize(recipientDocument))
 				.orElseThrow(RecipientNotFoundException::new);
-		if (recipient.getPublicId().equals(request.userId())) {
-			throw new InvalidRemittanceException("The recipient is the sender; use isSameAccount=true");
+		if (recipient.getPublicId().equals(senderId)) {
+			throw new InvalidRemittanceException("The recipient is the sender; omit the recipient to use the own account");
 		}
 		return recipient.getPublicId();
 	}
@@ -148,6 +152,10 @@ public class RemittanceTransactionService {
 				.orElseGet(() -> new UserDailyTransaction(sender.getPublicId(), ruleFor(sender), today));
 		daily.register(amountBrl);
 		return dailyTransactionRepository.save(daily);
+	}
+
+	private static boolean hasText(String value) {
+		return value != null && !value.isBlank();
 	}
 
 	private DailyLimitRule ruleFor(User sender) {

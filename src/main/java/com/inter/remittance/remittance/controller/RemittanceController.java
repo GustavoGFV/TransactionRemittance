@@ -25,6 +25,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import org.springframework.security.access.prepost.PreAuthorize;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -51,6 +52,8 @@ public class RemittanceController {
 	 * @param userId the public user id (UUID)
 	 * @return the BRL and USD balances of the user
 	 */
+	@ApiResponse(responseCode = "403", description = "Requires the USER token (POST /auth/login) of the user identified in the request", content = @Content)
+	@PreAuthorize("hasRole('USER') and #userId.toString() == authentication.name")
 	@GetMapping("/users/{userId}/balance")
 	@Operation(summary = "Get BRL and USD balances", description = "Returns both wallet balances of the user")
 	@ApiResponse(responseCode = "200", description = "Balances of the user")
@@ -69,6 +72,8 @@ public class RemittanceController {
 	 * @param usdAmount the desired amount in USD
 	 * @return the quotation and calculated cost in BRL
 	 */
+	@ApiResponse(responseCode = "403", description = "Requires the USER token (POST /auth/login) of the user identified in the request", content = @Content)
+	@PreAuthorize("hasRole('USER') and #userId.toString() == authentication.name")
 	@GetMapping("/users/{userId}/preview")
 	@Operation(summary = "Preview the BRL cost of a USD amount",
 			description = "Calculates how many Reais are needed to buy the desired USD amount at the current buy quotation (cotacaoCompra). Nothing is changed.")
@@ -76,7 +81,7 @@ public class RemittanceController {
 	@ApiResponse(responseCode = "400", description = "Invalid amount",
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
 	@ApiResponse(responseCode = "401", description = "Missing or invalid Bearer token", content = @Content)
-	@ApiResponse(responseCode = "404", description = "User or quotation not found",
+	@ApiResponse(responseCode = "404", description = "User, recipient or quotation not found",
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
 	@ApiResponse(responseCode = "503", description = "BCB API unavailable",
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
@@ -93,6 +98,8 @@ public class RemittanceController {
 	 * @param request the buy remittance request containing sender, recipient, and amount details
 	 * @return the remittance response with transaction details
 	 */
+	@ApiResponse(responseCode = "403", description = "Requires the USER token (POST /auth/login) of the user identified in the request", content = @Content)
+	@PreAuthorize("hasRole('USER') and #request.userId().toString() == authentication.name")
 	@PostMapping("/buy")
 	@Operation(summary = "Buy USD with BRL",
 			description = "Debits the sender's BRL and credits USD at the current buy quotation. With isSameAccount=true the USD goes to the sender's own account; "
@@ -107,12 +114,12 @@ public class RemittanceController {
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
 	@ApiResponse(responseCode = "503", description = "BCB API unavailable",
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
-	@io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Sender, BRL amount and destination. recipientDocument is mandatory only when isSameAccount is false.",
+	@io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Sender, BRL amount and destination. recipientDocument is optional: it is mandatory only when isSameAccount is false (the recipient must be a registered user) and ignored when isSameAccount is true.",
 			required = true, content = @Content(examples = {
-					@io.swagger.v3.oas.annotations.media.ExampleObject(name = "Same account",
-							value = "{\"userId\":\"3f2b8c1e-6a4d-4f7e-9b1a-2c5d7e8f9a0b\",\"amountBrl\":500.00,\"isSameAccount\":true}"),
 					@io.swagger.v3.oas.annotations.media.ExampleObject(name = "External transfer",
-							value = "{\"userId\":\"3f2b8c1e-6a4d-4f7e-9b1a-2c5d7e8f9a0b\",\"amountBrl\":500.00,\"isSameAccount\":false,\"recipientDocument\":\"11.222.333/0001-81\"}")}))
+							value = "{\"userId\":\"3f2b8c1e-6a4d-4f7e-9b1a-2c5d7e8f9a0b\",\"amountBrl\":500.00,\"isSameAccount\":false,\"recipientDocument\":\"11.222.333/0001-81\"}"),
+					@io.swagger.v3.oas.annotations.media.ExampleObject(name = "Same account (recipientDocument omitted)",
+							value = "{\"userId\":\"3f2b8c1e-6a4d-4f7e-9b1a-2c5d7e8f9a0b\",\"amountBrl\":500.00,\"isSameAccount\":true}")}))
 	public CompletableFuture<RemittanceResponse> buy(@Valid @RequestBody BuyRemittanceRequest request) {
 		return remittanceService.buy(request);
 	}
@@ -122,22 +129,27 @@ public class RemittanceController {
 	 * @param request the reverse remittance request containing sender, recipient, and amount details
 	 * @return the remittance response with transaction details
 	 */
+	@ApiResponse(responseCode = "403", description = "Requires the USER token (POST /auth/login) of the user identified in the request", content = @Content)
+	@PreAuthorize("hasRole('USER') and #request.userId().toString() == authentication.name")
 	@PostMapping("/reverse")
 	@Operation(summary = "Reverse remittance (USD to BRL)",
-			description = "Debits USD and credits BRL on the user's own account using the current buy quotation (BRL amount rounded down to the cent). Does not count toward the daily limit.")
+			description = "Debits the user's USD and credits BRL at the current buy quotation (rounded down to the cent). The BRL goes to the user's own account, or to the registered user owning recipientDocument when it is informed. Does not count toward the daily limit.")
 	@ApiResponse(responseCode = "200", description = "Conversion completed")
 	@ApiResponse(responseCode = "400", description = "Invalid payload",
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
 	@ApiResponse(responseCode = "401", description = "Missing or invalid Bearer token", content = @Content)
-	@ApiResponse(responseCode = "404", description = "User or quotation not found",
+	@ApiResponse(responseCode = "404", description = "User, recipient or quotation not found",
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
 	@ApiResponse(responseCode = "422", description = "Insufficient USD balance",
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
 	@ApiResponse(responseCode = "503", description = "BCB API unavailable",
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
-	@io.swagger.v3.oas.annotations.parameters.RequestBody(description = "User and USD amount to convert; both fields are mandatory.", required = true,
-			content = @Content(examples = @io.swagger.v3.oas.annotations.media.ExampleObject(
-					value = "{\"userId\":\"3f2b8c1e-6a4d-4f7e-9b1a-2c5d7e8f9a0b\",\"amountUsd\":100.00}")))
+	@io.swagger.v3.oas.annotations.parameters.RequestBody(description = "User and USD amount are mandatory. recipientDocument is optional: when given, the BRL is credited to that registered user instead of the sender.",
+			required = true, content = @Content(examples = {
+					@io.swagger.v3.oas.annotations.media.ExampleObject(name = "To another user",
+							value = "{\"userId\":\"3f2b8c1e-6a4d-4f7e-9b1a-2c5d7e8f9a0b\",\"amountUsd\":100.00,\"recipientDocument\":\"11.222.333/0001-81\"}"),
+					@io.swagger.v3.oas.annotations.media.ExampleObject(name = "Own account (recipientDocument omitted)",
+							value = "{\"userId\":\"3f2b8c1e-6a4d-4f7e-9b1a-2c5d7e8f9a0b\",\"amountUsd\":100.00}")}))
 	public CompletableFuture<RemittanceResponse> reverse(@Valid @RequestBody ReverseRemittanceRequest request) {
 		return remittanceService.reverse(request);
 	}

@@ -177,6 +177,32 @@ class RemittanceTransactionServiceTest {
 	}
 
 	@Test
+	void reverseCanCreditAnotherRegisteredUser() {
+		User sender = user(CPF, "0.00", "100.00");
+		User recipient = user(CNPJ, "0.00", "0.00");
+		when(userRepository.findByDocument(CNPJ)).thenReturn(Optional.of(recipient));
+		when(userRepository.lockAllByPublicIdIn(any())).thenReturn(List.of(sender, recipient));
+
+		RemittanceResponse response = service.reverse(
+				new ReverseRemittanceRequest(sender.getPublicId(), new BigDecimal("40.00"), CNPJ), new BigDecimal("5.2073"));
+
+		assertThat(sender.getBalanceUsd()).isEqualByComparingTo("60.00");
+		assertThat(sender.getBalanceBrl()).isEqualByComparingTo("0.00");
+		assertThat(recipient.getBalanceBrl()).isEqualByComparingTo("208.29");
+		assertThat(response.beneficiaryId()).isEqualTo(recipient.getPublicId());
+	}
+
+	@Test
+	void reverseToUnknownRecipientIsRejected() {
+		User sender = user(CPF, "0.00", "100.00");
+		when(userRepository.findByDocument(CNPJ)).thenReturn(Optional.empty());
+
+		assertThatThrownBy(() -> service.reverse(
+				new ReverseRemittanceRequest(sender.getPublicId(), new BigDecimal("10.00"), CNPJ), RATE))
+				.isInstanceOf(RecipientNotFoundException.class);
+	}
+
+	@Test
 	void reverseConvertsUsdToBrl() {
 		User user = user(CPF, "0.00", "100.00");
 		when(userRepository.lockAllByPublicIdIn(any())).thenReturn(List.of(user));
