@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inter-remittance
+  labels:
+    app: inter-remittance
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: inter-remittance
+  template:
+    metadata:
+      labels:
+        app: inter-remittance
+    spec:
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: app
+          image: inter-remittance:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://remittance-postgres:5432/remittance
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: remittance-db-credentials
+                  key: POSTGRES_USER
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: remittance-db-credentials
+                  key: POSTGRES_PASSWORD
+            - name: SPRING_DOCKER_COMPOSE_ENABLED
+              value: "false"
+            # (pool size x replicas) must stay below PostgreSQL max_connections (100)
+            - name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+              value: "20"
+            - name: JAVA_OPTS
+              value: >-
+                -XX:+UseG1GC -XX:MaxGCPauseMillis=100
+                -XX:InitialRAMPercentage=50.0 -XX:MaxRAMPercentage=75.0
+                -XX:+UseStringDeduplication -XX:+ExitOnOutOfMemoryError
+          resources:
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi # requests == limits on memory: the heap percentage is computed from it
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            periodSeconds: 10
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"] # let the Service drop the pod before graceful shutdown starts
