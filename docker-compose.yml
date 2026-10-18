@@ -17,19 +17,6 @@ services:
       timeout: 3s
       retries: 10
 
-  # Local quality server: docker compose --profile quality up -d sonarqube  (UI: http://localhost:9000, admin/admin)
-  sonarqube:
-    profiles: ["quality"]
-    image: sonarqube:community
-    container_name: remittance-sonarqube
-    environment:
-      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
-    ports:
-      - "9000:9000"
-    volumes:
-      - sonarqube-data:/opt/sonarqube/data
-      - sonarqube-extensions:/opt/sonarqube/extensions
-
   # Only started with: docker compose --profile app up --build
   # (the profile keeps Spring Boot's docker-compose support from starting it during local development)
   app:
@@ -54,6 +41,4 @@ services:
 
 volumes:
   postgres-data:
-  sonarqube-data:
-  sonarqube-extensions:
 
