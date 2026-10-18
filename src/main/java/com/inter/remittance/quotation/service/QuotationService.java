@@ -37,8 +37,14 @@ public class QuotationService {
 		return CompletableFuture.supplyAsync(() -> findOnLastBusinessDay(date), executor);
 	}
 
-	// Weekends are resolved arithmetically (no BCB call); the loop only runs again for holidays,
-	// when BCB returns an empty list for a weekday.
+	/**
+	 * Attempts to find the buy quotations for the given date, checking the last business days
+	 * up to a maximum number of attempts. Weekends are adjusted automatically.
+	 *
+	 * @param date the date for which to retrieve the buy quotations
+	 * @return a list of BuyQuotation objects
+	 * @throws QuotationNotFoundException if no quotations are found within the allowed attempts
+	 */
 	private List<BuyQuotation> findOnLastBusinessDay(LocalDate date) {
 		LocalDate current = adjustWeekend(date);
 		for (int attempt = 0; attempt < MAX_BUSINESS_DAY_ATTEMPTS; attempt++) {

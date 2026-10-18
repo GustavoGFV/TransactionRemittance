@@ -1,6 +1,5 @@
 package com.inter.remittance.quotation.client;
 
-import java.util.Date;
 
 import org.springframework.context.annotation.Bean;
 
@@ -20,7 +19,9 @@ public class BcbPtaxClientConfig {
 		return new Retryer.Default(RETRY_PERIOD_MS, RETRY_MAX_PERIOD_MS, MAX_ATTEMPTS);
 	}
 
-	// Feign only retries RetryableException; 5xx responses are made retryable here.
+	/**
+	 * Feign only retries RetryableException; 5xx responses are made retryable here.
+	 */
 	@Bean
 	ErrorDecoder bcbPtaxErrorDecoder() {
 		ErrorDecoder defaultDecoder = new ErrorDecoder.Default();
@@ -28,7 +29,7 @@ public class BcbPtaxClientConfig {
 			Exception exception = defaultDecoder.decode(methodKey, response);
 			if (response.status() >= 500 && exception instanceof FeignException feignException) {
 				return new RetryableException(response.status(), feignException.getMessage(),
-						response.request().httpMethod(), (Date) null, response.request());
+						response.request().httpMethod(), (Long) null, response.request());
 			}
 			return exception;
 		};

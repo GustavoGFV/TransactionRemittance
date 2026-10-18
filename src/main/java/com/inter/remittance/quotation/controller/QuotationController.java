@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -18,7 +19,6 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import org.springframework.http.ProblemDetail;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
@@ -32,6 +32,12 @@ public class QuotationController {
 		this.quotationService = quotationService;
 	}
 
+	/**
+	 * Endpoint to get the buy quotations for a specific date.
+	 * 
+	 * @param date the date for which to retrieve the buy quotations
+	 * @return a CompletableFuture containing a list of BuyQuotation objects
+	 */
 	@GetMapping
 	@Operation(summary = "Get dollar buy quotation",
 			description = "Returns the buy quotation (cotacaoCompra) for each PTAX bulletin of the given day. "
