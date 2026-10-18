@@ -9,7 +9,7 @@ REST API for international remittances (BRL → USD and back), built with Java 2
 | `user` | User CRUD (PF/PJ, CPF/CNPJ validation, BRL/USD balances) |
 | `quotation` | BCB PTAX client (OpenFeign + circuit breaker + retries), weekend/holiday fallback, Caffeine cache |
 | `remittance` | Core business rules: balances, preview, buy, reverse, daily limits. Orchestrates `user` and `quotation` |
-| `security` | JWT (HS256) issuing and resource-server validation |
+| `security` | JWT (HS256) issuing (ADMIN via client credentials, USER via e-mail/password), role and ownership checks |
 
 ```mermaid
 flowchart LR
@@ -42,6 +42,9 @@ Key decisions:
 - **Daily limit:** `daily_limit_rules` (CPF R$ 10,000 / CNPJ R$ 50,000) and `user_daily_transactions` (running total per user per day). Every buy (same-account or external) counts; PF and PJ can send to each other within the limits. Reverse (USD → BRL) is not counted.
 - **ACID:** each remittance is one `@Transactional` unit. Rows are locked ordered by id (no deadlocks); the quotation is fetched *before* the transaction so no connection is held while waiting for the BCB.
 - **Cache:** quotations are cached by date (Caffeine, TTL `app.cache.quotations.ttl`, default 10 min). Failures are never cached.
+- **Stampede protection:** `@Cacheable(sync = true)` makes concurrent misses for the same date share one BCB call.
+- **Stale-if-error:** the last successful quotation is kept (`app.cache.quotations.stale-max-age`, default 24h) and served when the BCB fails, instead of answering 503. Each use increments the `quotation.stale.served` metric; with nothing remembered the error is propagated.
+- **Cache metrics:** Caffeine runs with `recordStats()`, so Micrometer publishes `cache.gets` (hit/miss), `cache.puts` and `cache.evictions` for the `quotations` cache, plus `quotation.stale.served`; available at `/actuator/metrics` and in Datadog.
 - **Concurrency:** virtual threads + `CompletableFuture`; Hikari pool is fixed-size (20) with short timeouts.
 - **Errors:** RFC 7807 `ProblemDetail` responses (400, 401, 404, 409, 422, 503).
 
@@ -58,21 +61,36 @@ Beyond the mandatory requirements, the following decisions were made on purpose.
 | Consistency | Quotation fetched **before** opening the transaction | No database connection or lock is held while waiting for a network call |
 | Resilience | OpenFeign + Resilience4j circuit breaker + 3 retries | Declarative HTTP client; the breaker stops cascading failures when the BCB is down and the API answers a clean `503` |
 | Resilience | Weekend/holiday fallback to the last business day | The BCB publishes no bulletin on non-business days; the last available `cotacaoCompra` is used, with a bounded number of attempts |
-| Performance | Caffeine cache by date (TTL 10 min, failures never cached) | The rate changes a few times a day; avoids hammering the BCB and cuts latency under high request volume |
+| Performance | Caffeine cache by date (TTL 10 min, failures never cached), single-flight on concurrent misses, stale-if-error and cache metrics | The rate changes a few times a day; avoids hammering the BCB and cuts latency under high request volume; a BCB outage degrades to the last known rate and is observable |
 | Performance | Virtual threads + `CompletableFuture` | I/O-bound work (BCB calls) does not block platform threads, so throughput scales without a large thread pool |
 | Performance | Fixed-size HikariCP pool with short timeouts; G1GC, percentage-based heap, `AlwaysPreTouch` | Predictable memory and connections inside containers, avoiding pauses and latency spikes |
-| Security | JWT (HS256) resource server on `/users/**` and `/remittances/**`; BCrypt password hashes | Sensitive endpoints require a Bearer token; passwords are never stored or returned in clear text and are excluded from `toString` |
+| Security | JWT (HS256) resource server with roles: ADMIN manages users, USER operates only on its own id (`@PreAuthorize`); BCrypt password hashes | Money movements are tied to the authenticated owner, and user administration needs a higher role. Passwords are never stored or returned in clear text and are excluded from `toString` |
 | Errors | RFC 7807 `ProblemDetail` with a global `@RestControllerAdvice` | Consistent, machine-readable error contract (400, 401, 404, 409, 422, 503) |
 | Design | Layered packages (`controller`, `service`, `repository`, `dto`, `mapper`), records + MapStruct, constructor injection | Low coupling, SOLID, immutable DTOs, easy to mock and test |
 | Documentation | OpenAPI/Swagger with descriptions, examples and required flags on every endpoint and field | Self-explanatory API for evaluators and consumers |
 | Quality | Unit tests (JUnit 5 + Mockito) and integration tests (Testcontainers + PostgreSQL), JaCoCo coverage | Business rules are verified in isolation and end to end against the real database |
-| Quality | SonarQube quality gate in the Docker build | A container image is only produced if code quality, coverage and vulnerability checks pass |
 | Operations | Multi-stage `Dockerfile`, `docker-compose`, Kubernetes manifests (probes, resources, secrets), Actuator health | Same artifact from laptop to cluster; the app is observable and restarts safely |
+
+### Why PostgreSQL instead of an in-memory database
+
+Although H2 is commonly used for quick prototyping, **PostgreSQL** running on Docker/Kubernetes was chosen as a production-grade architectural decision:
+
+- **Concurrency correctness:** strict ACID isolation and real row-level locking (`SELECT ... FOR UPDATE`), combined with optimistic versioning (`@Version`), prevent race conditions in balance and daily-limit control. An in-memory database would mask exactly these issues, because its locking and isolation semantics differ from production.
+- **Data integrity:** constraints (`UNIQUE` on e-mail, document and `(user, date)`), `NUMERIC` precision for monetary values and versioned Flyway migrations keep the model consistent and reproducible across environments.
+- **Scalability:** a standalone server decouples state from the application, so the API scales horizontally behind several replicas sharing one source of truth, with a bounded HikariCP pool sized against `max_connections`.
+- **Security and auditability:** durable persistence, role-based access and a queryable audit trail (`user_daily_transactions`) that survive restarts, which a volatile database cannot offer.
+- **Observability:** connection-pool metrics (HikariCP via Micrometer), health probes and query-level diagnostics integrate with Datadog, aligning the solution with modern cloud-native standards.
+
+The cost is one extra container, which `docker compose` and Testcontainers make transparent for evaluators.
+
 ## Build and run
 
-Requirements: JDK 21, Docker.
+Requirements: JDK 21 and Docker (PostgreSQL runs in a container; Maven is provided by the wrapper).
 
 ```bash
+# Compile and package (runs the unit tests; add -DskipTests to skip them)
+./mvnw clean package
+
 # PostgreSQL only, then the app from Maven
 docker compose up -d postgres
 ./mvnw spring-boot:run
@@ -84,50 +102,54 @@ docker compose --profile app up --build -d
 - Swagger UI: http://localhost:8080/swagger-ui/index.html
 - Health: http://localhost:8080/actuator/health
 
-### Authentication
+### Authentication and authorization
 
-```bash
-curl -X POST http://localhost:8080/auth/token -H "Content-Type: application/json" \
-  -d '{"clientId":"remittance-client","clientSecret":"remittance-secret"}'
-```
+Two kinds of Bearer (JWT, HS256) tokens are issued:
 
-Send the returned token as `Authorization: Bearer <token>` (Swagger: **Authorize**). `/users/**` and `/remittances/**` are secured; `/quotations` is public. Override the dev defaults with `JWT_SECRET` (≥ 32 bytes), `JWT_TTL`, `AUTH_CLIENT_ID`, `AUTH_CLIENT_SECRET`.
+| Token | How to get it | Role | What it can do |
+|---|---|---|---|
+| ADMIN | `POST /auth/token` with the API client credentials (`remittance-client` / `remittance-secret` by default) | `ADMIN` | List users; read, update and delete any user. **Cannot** operate remittances |
+| USER | `POST /auth/login` with the user's e-mail and password | `USER` | Read, update and delete **only their own** profile; balance, preview, buy and reverse **only for their own** `userId` (the token subject must match the id in the request) |
+
+`/users/**` and `/remittances/**` require a token (`401` without it, `403` with the wrong role or another user's id), except `POST /users` (public sign-up, so a person can open an account without being an admin). `/auth/**`, `/quotations` and the Swagger/health endpoints are public. In Swagger UI click **Authorize** and paste the token (without the `Bearer ` prefix). Override the dev defaults with `JWT_SECRET` (>= 32 bytes), `JWT_TTL`, `AUTH_CLIENT_ID`, `AUTH_CLIENT_SECRET`.
 
 ## Step-by-step test guide
 
-Run everything from Swagger UI (**Authorize** with the token) or with `curl` (Bash; on Windows use `curl.exe` and Git Bash/WSL, or paste the JSON in Swagger).
+From user creation to purchase. Use Swagger UI or `curl` (Bash with `jq`; on Windows use Git Bash/WSL).
 
 ```bash
-# 0. Start the stack and get a token
+# 0. Start the stack
 docker compose --profile app up --build -d
-TOKEN=$(curl -s -X POST localhost:8080/auth/token -H "Content-Type: application/json" \
-  -d '{"clientId":"remittance-client","clientSecret":"remittance-secret"}' | jq -r .accessToken)
-AUTH="Authorization: Bearer $TOKEN"
 
-# 1. Quotation (public). Date format is 'MM-dd-yyyy' with single quotes; weekends return the last business day
+# 1. Create the sender (PF, R$ 1,500) and the recipient (PJ). Public sign-up: no token. Valid CPF/CNPJ, unique e-mail and document
+SENDER_ID=$(curl -s -X POST localhost:8080/users -H "Content-Type: application/json" \
+  -d '{"name":"Maria Silva","email":"maria@mail.com","document":"529.982.247-25","password":"S3nh@Forte2026","balanceBrl":1500.00}' | jq -r .id)
+RECIPIENT_ID=$(curl -s -X POST localhost:8080/users -H "Content-Type: application/json" \
+  -d '{"name":"Empresa LTDA","email":"empresa@mail.com","document":"11.222.333/0001-81","password":"S3nh@Forte2026"}' | jq -r .id)
+
+# 2. Log in as the sender: this USER token only works for the sender's own id
+USER=$(curl -s -X POST localhost:8080/auth/login -H "Content-Type: application/json" \
+  -d '{"email":"maria@mail.com","password":"S3nh@Forte2026"}' | jq -r .accessToken)
+
+# 3. Quotation (public). Date format is 'MM-dd-yyyy' with single quotes; weekends return the last business day
 curl -s -g "localhost:8080/quotations?date='10-01-2026'"
 
-# 2. Create a sender (PF, R$ 1,500) and a recipient (PJ). Valid CPF/CNPJ, unique e-mail and document
-curl -s -X POST localhost:8080/users -H "$AUTH" -H "Content-Type: application/json" \
-  -d '{"name":"Maria Silva","email":"maria@mail.com","document":"529.982.247-25","password":"S3nh@Forte2026","balanceBrl":1500.00}'
-curl -s -X POST localhost:8080/users -H "$AUTH" -H "Content-Type: application/json" \
-  -d '{"name":"Empresa LTDA","email":"empresa@mail.com","document":"11.222.333/0001-81","password":"S3nh@Forte2026"}'
-# Keep the returned "id" values: SENDER_ID and RECIPIENT_ID
+# 4. Balance and preview (BRL cost of USD 100)
+curl -s -H "Authorization: Bearer $USER" localhost:8080/remittances/users/$SENDER_ID/balance
+curl -s -H "Authorization: Bearer $USER" "localhost:8080/remittances/users/$SENDER_ID/preview?usdAmount=100.00"
 
-# 3. Check balances and preview the BRL cost of USD 100
-curl -s -H "$AUTH" localhost:8080/remittances/users/$SENDER_ID/balance
-curl -s -H "$AUTH" "localhost:8080/remittances/users/$SENDER_ID/preview?usdAmount=100.00"
-
-# 4. Buy USD for another user (external transfer: recipientDocument is required)
-curl -s -X POST localhost:8080/remittances/buy -H "$AUTH" -H "Content-Type: application/json" \
+# 5. Buy USD for another user (external transfer: recipientDocument is required)
+curl -s -X POST localhost:8080/remittances/buy -H "Authorization: Bearer $USER" -H "Content-Type: application/json" \
   -d '{"userId":"'$SENDER_ID'","amountBrl":500.00,"isSameAccount":false,"recipientDocument":"11222333000181"}'
 
-# 5. Buy USD into the sender's own USD wallet (no recipient)
-curl -s -X POST localhost:8080/remittances/buy -H "$AUTH" -H "Content-Type: application/json" \
+# 6. Buy USD into the sender's own USD wallet (no recipient)
+curl -s -X POST localhost:8080/remittances/buy -H "Authorization: Bearer $USER" -H "Content-Type: application/json" \
   -d '{"userId":"'$SENDER_ID'","amountBrl":100.00,"isSameAccount":true}'
 
-# 6. Reverse USD back to BRL (recipient must hold USD; use its id)
-curl -s -X POST localhost:8080/remittances/reverse -H "$AUTH" -H "Content-Type: application/json" \
+# 7. Reverse USD back to BRL: log in as the recipient first, since it is the one holding USD (optionally add "recipientDocument" to credit the BRL to another registered user)
+RECIPIENT=$(curl -s -X POST localhost:8080/auth/login -H "Content-Type: application/json" \
+  -d '{"email":"empresa@mail.com","password":"S3nh@Forte2026"}' | jq -r .accessToken)
+curl -s -X POST localhost:8080/remittances/reverse -H "Authorization: Bearer $RECIPIENT" -H "Content-Type: application/json" \
   -d '{"userId":"'$RECIPIENT_ID'","amountUsd":10.00}'
 ```
 
@@ -136,8 +158,11 @@ Expected error scenarios (RFC 7807 bodies):
 | Scenario | How to trigger | Result |
 |---|---|---|
 | No / invalid token | Omit the `Authorization` header on `/users` or `/remittances` | `401` |
-| Invalid or duplicated CPF/CNPJ or e-mail | Repeat step 2, or use `111.111.111-11` | `400` / `409` |
-| Weak password | `"password":"123"` in step 2 | `400` |
+| Wrong role | List users with a USER token; buy with the ADMIN token | `403` |
+| Another user's data | Use Maria's token with `SENDER_ID` replaced by `RECIPIENT_ID` | `403` |
+| Wrong login | Wrong password or unknown e-mail on `/auth/login` | `401` |
+| Invalid or duplicated CPF/CNPJ or e-mail | Repeat step 1, or use `111.111.111-11` | `400` / `409` |
+| Weak password | `"password":"123"` in step 1 | `400` |
 | Insufficient balance | `amountBrl` above the sender's BRL balance | `422`, balances unchanged |
 | Daily limit exceeded | Buys totalling more than R$ 10,000 (PF) or R$ 50,000 (PJ) in one day | `422`, nothing is debited |
 | Minimum amount | `amountBrl` below `1.00` | `400` |
@@ -145,6 +170,7 @@ Expected error scenarios (RFC 7807 bodies):
 | BCB unavailable | Stop network access to the BCB | `503`, circuit breaker opens |
 
 After each remittance, call the balance endpoint again: BRL decreases, USD increases, and a failed request leaves both untouched (ACID rollback).
+
 ## Tests
 
 ```bash
@@ -152,18 +178,28 @@ After each remittance, call the balance endpoint again: BRL decreases, USD incre
 ./mvnw verify    # unit + integration tests; integration tests start PostgreSQL with Testcontainers (Docker required)
 ```
 
-`RemittanceFlowIT` exercises the full HTTP flow against a real PostgreSQL: token, document validation and duplicates, daily limit, rollback on failure, quotation cache and BCB outage (only the BCB client is mocked). The JaCoCo report is generated at `target/site/jacoco/index.html`.
+`RemittanceFlowIT` exercises the full HTTP flow against a real PostgreSQL: token, document validation and duplicates, daily limit, rollback on failure, quotation cache and BCB outage (only the BCB client is mocked). 
 
-## SonarQube quality gate
+`CrossBorderScenarioIT` runs a business scenario in sequence against PostgreSQL (CPF user with R$ 12,000 and CNPJ user with R$ 0, quotation mocked at 5.00):
 
-```bash
-docker compose --profile quality up -d sonarqube      # http://localhost:9000 (admin/admin), create a token
-export SONAR_TOKEN=<token>
-docker build --build-arg SONAR_HOST_URL=http://host.docker.internal:9000 \
-  --secret id=sonar_token,env=SONAR_TOKEN -t remittance .
-```
+| # | Scenario | Expected |
+|---|----------|----------|
+| 1 | CNPJ tries to buy USD with no BRL balance | 422, balances unchanged |
+| 2 | CPF buys USD for R$ 2,000 (own account), sends R$ 2,000 to the CNPJ, then tries R$ 7,000 | first two succeed; the last returns 422 (daily limit of R$ 10,000 exceeded) |
+| 3 | CNPJ converts 200 USD back to BRL | R$ 1,000 credited, CNPJ ends with 200 USD and R$ 1,000 |
+| 4 | CNPJ buys USD for R$ 1,000 on a simulated Saturday | BCB queried only with the previous Friday ('10-16-2026'); Friday quotation applied |
 
-The Dockerfile has a `quality` stage between build and runtime: the image is only produced if the quality gate passes. Without `SONAR_HOST_URL` the analysis is skipped. Unit tests and coverage run in the build stage; integration tests run in CI (`./mvnw verify`) because they need a Docker daemon.
+Cache and resilience tests:
+
+| Test | Validates |
+|------|-----------|
+| `QuotationCacheTest` (no Docker) | 50 concurrent requests produce 1 BCB call; repeated request is a cache hit; entry expires after the TTL; hit/miss stats are recorded |
+| `QuotationServiceTest` | stale quotation served when the BCB fails (and counted); error propagated when nothing is remembered; "not found" is never masked by stale data |
+| `RemittanceFlowIT` | end to end: stale quotation served over HTTP after an outage, `cache.gets` metric registered, outage without history returns 503 |
+
+The test classes start with a `/* ... */` index comment listing what each scenario covers.
+
+The JaCoCo report is generated at `target/site/jacoco/index.html`.
 
 ## Kubernetes
 
@@ -176,5 +212,7 @@ The deployment sets G1GC, heap as a percentage of the container limit (memory re
 ## Notes
 
 - The BCB endpoint used is `CotacaoDolarDia`; on weekends the last business day is used (Saturday → Friday, Sunday → Friday, holidays by bounded retry on previous days).
-- Deviations from the original statement: PostgreSQL is used instead of an in-memory database (Flyway + Testcontainers keep it reproducible), and user passwords are stored as BCrypt hashes (API access is still protected by client-credentials JWT; per-user login is not part of the scope).
+- Deviation from the original statement: PostgreSQL is used instead of an in-memory database (see *Why PostgreSQL*). Flyway and Testcontainers keep the schema and the tests reproducible.
+- Sign-up accepts an initial `balanceBrl`/`balanceUsd` so the flow can be exercised without a deposit feature; in a real product this would be restricted to administrators.
+- Passwords are stored as BCrypt hashes; the stale quotation and daily limit rules are described in *Architecture*.
 - Configuration is externalised through environment variables (see `application.properties`).
