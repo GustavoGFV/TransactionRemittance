@@ -8,7 +8,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import com.inter.remittance.quotation.exception.QuotationNotFoundException;
 import com.inter.remittance.quotation.exception.QuotationUnavailableException;
 
-@RestControllerAdvice(assignableTypes = QuotationController.class)
+// Not scoped to QuotationController: the remittance endpoints also depend on the quotation and must answer 404/503 the same way
+@RestControllerAdvice
 public class QuotationExceptionHandler {
 
 	@ExceptionHandler(QuotationNotFoundException.class)

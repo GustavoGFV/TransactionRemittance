@@ -8,9 +8,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import com.inter.remittance.quotation.client.BcbPtaxClient;
+import com.inter.remittance.quotation.config.QuotationCacheConfig;
 import com.inter.remittance.quotation.dto.BuyQuotation;
 import com.inter.remittance.quotation.exception.QuotationNotFoundException;
 import com.inter.remittance.quotation.mapper.QuotationMapper;
@@ -40,6 +42,11 @@ public class QuotationService {
 		this.executor = executor;
 	}
 
+	/**
+	 * Cached by date: the rate moves a few times a day at most, so repeated remittances do not hit the BCB.
+	 * Failed lookups are never cached (a failed future is not stored), so an outage does not outlive itself.
+	 */
+	@Cacheable(cacheNames = QuotationCacheConfig.QUOTATIONS_CACHE, key = "#date")
 	public CompletableFuture<List<BuyQuotation>> findBuyQuotations(LocalDate date) {
 		return CompletableFuture.supplyAsync(() -> findOnLastBusinessDay(date), executor);
 	}
