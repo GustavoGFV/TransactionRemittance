@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,9 +25,11 @@ import com.inter.remittance.user.validation.Documents;
 public class UserService {
 
 	private final UserRepository repository;
+	private final PasswordEncoder passwordEncoder;
 
-	public UserService(UserRepository repository) {
+	public UserService(UserRepository repository, PasswordEncoder passwordEncoder) {
 		this.repository = repository;
+		this.passwordEncoder = passwordEncoder;
 	}
 
 	@Transactional
@@ -41,7 +44,7 @@ public class UserService {
 			throw new DuplicateUserException("document");
 		}
 
-		User user = new User(request.name().strip(), email, document,
+		User user = new User(request.name().strip(), email, document, passwordEncoder.encode(request.password()),
 				orZero(request.balanceBrl()), orZero(request.balanceUsd()));
 		try {
 			return repository.saveAndFlush(user);
@@ -72,6 +75,9 @@ public class UserService {
 		}
 
 		user.changeProfile(request.name().strip(), email);
+		if (request.password() != null) {
+			user.changePasswordHash(passwordEncoder.encode(request.password()));
+		}
 		try {
 			return repository.saveAndFlush(user);
 		}

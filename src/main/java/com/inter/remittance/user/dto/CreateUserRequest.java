@@ -20,8 +20,17 @@ public record CreateUserRequest(
 		@Schema(description = "Valid and unique CPF (11 digits) or CNPJ (14 characters); punctuation is accepted and removed",
 				example = "529.982.247-25", requiredMode = Schema.RequiredMode.REQUIRED)
 		@NotBlank @ValidDocument String document,
+		@Schema(description = "Password, 8 to 72 characters. Stored as a BCrypt hash and never returned", example = "S3nh@Forte2026",
+				requiredMode = Schema.RequiredMode.REQUIRED, minLength = 8, maxLength = 72, accessMode = Schema.AccessMode.WRITE_ONLY)
+		@NotBlank @Size(min = 8, max = 72) String password,
 		@Schema(description = "Initial BRL balance (defaults to 0)", example = "1500.00", requiredMode = Schema.RequiredMode.NOT_REQUIRED, minimum = "0")
 		@PositiveOrZero @Digits(integer = 17, fraction = 2) BigDecimal balanceBrl,
 		@Schema(description = "Initial USD balance (defaults to 0)", example = "250.50", requiredMode = Schema.RequiredMode.NOT_REQUIRED, minimum = "0")
 		@PositiveOrZero @Digits(integer = 17, fraction = 2) BigDecimal balanceUsd) {
+
+	// The password must never reach the logs
+	@Override
+	public String toString() {
+		return "CreateUserRequest[name=" + name + ", email=" + email + ", document=" + document + "]";
+	}
 }

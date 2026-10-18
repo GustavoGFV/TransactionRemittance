@@ -62,10 +62,10 @@ public class UserController {
 	 */
 	@PostMapping
 	@Operation(summary = "Create a user",
-			description = "Registers a person (CPF) or company (CNPJ). Document and email must be valid and unique. "
+			description = "Registers a person (CPF) or company (CNPJ). Document and email must be valid and unique and the password is stored as a BCrypt hash. "
 					+ "Balances are optional and default to 0.")
 	@ApiResponse(responseCode = "201", description = "User created; the Location header points to the new resource")
-	@ApiResponse(responseCode = "400", description = "Invalid payload (e.g. invalid CPF/CNPJ or email)",
+	@ApiResponse(responseCode = "400", description = "Invalid payload (e.g. invalid CPF/CNPJ or email, password shorter than 8 characters)",
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
 	@ApiResponse(responseCode = "409", description = "Email or document already registered",
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))

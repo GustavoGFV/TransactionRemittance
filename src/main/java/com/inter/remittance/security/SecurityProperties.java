@@ -19,7 +19,7 @@ public record SecurityProperties(Jwt jwt, Client client) {
 	public record Jwt(String secret, Duration ttl) {
 	}
 
-	// Credentials of the API consumer allowed to request tokens (no end-user password exists in the domain)
+	// Credentials of the API consumer allowed to request tokens (users have a password, but it is not used to authenticate API calls yet)
 	public record Client(String id, String secret) {
 	}
 

@@ -38,6 +38,10 @@ public class User {
 	@Column(nullable = false, length = 14, unique = true)
 	private String document;
 
+	// BCrypt hash only; the plain password is never stored or exposed
+	@Column(name = "password_hash", nullable = false, length = 100)
+	private String passwordHash;
+
 	@Column(name = "balance_brl", nullable = false, precision = 19, scale = 2)
 	private BigDecimal balanceBrl;
 
@@ -57,11 +61,13 @@ public class User {
 	protected User() {
 	}
 
-	public User(String name, String email, String document, BigDecimal balanceBrl, BigDecimal balanceUsd) {
+	public User(String name, String email, String document, String passwordHash, BigDecimal balanceBrl,
+			BigDecimal balanceUsd) {
 		this.publicId = UUID.randomUUID();
 		this.name = name;
 		this.email = email;
 		this.document = document;
+		this.passwordHash = passwordHash;
 		this.balanceBrl = balanceBrl;
 		this.balanceUsd = balanceUsd;
 	}
@@ -80,6 +86,10 @@ public class User {
 	public void changeProfile(String name, String email) {
 		this.name = name;
 		this.email = email;
+	}
+
+	public void changePasswordHash(String passwordHash) {
+		this.passwordHash = passwordHash;
 	}
 
 	public void debitBrl(BigDecimal amount) {

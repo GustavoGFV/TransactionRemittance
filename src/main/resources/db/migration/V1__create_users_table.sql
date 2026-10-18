@@ -4,6 +4,7 @@ CREATE TABLE users (
     name        VARCHAR(150)  NOT NULL,
     email       VARCHAR(254)  NOT NULL,
     document    VARCHAR(14)   NOT NULL,
+    password_hash VARCHAR(100) NOT NULL,
     balance_brl NUMERIC(19,2) NOT NULL DEFAULT 0,
     balance_usd NUMERIC(19,2) NOT NULL DEFAULT 0,
     version     BIGINT        NOT NULL DEFAULT 0,
