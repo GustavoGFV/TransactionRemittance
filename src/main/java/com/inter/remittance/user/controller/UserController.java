@@ -71,16 +71,16 @@ public class UserController {
 					+ "| Field | Required | Behavior |\n|---|---|---|\n"
 					+ "| `name`, `email`, `document`, `password` | yes | Email and document must be valid and unique; password is stored as a BCrypt hash |\n"
 					+ "| `balanceBrl`, `balanceUsd` | **OPTIONAL** | **Default to 0** |\n\n"
-					+ "Next step: `POST /auth/login` with the same email and password.")
-	@ApiResponse(responseCode = "201", description = "User created; the Location header points to the new resource")
+					+ "The response has **no body**: nothing about the user is echoed back. Next step: `POST /auth/login` with the same email and password.")
+	@ApiResponse(responseCode = "201", description = "User created. Empty body (no user data is echoed back); the Location header carries only the new public id", content = @Content)
 	@ApiResponse(responseCode = "400", description = "Invalid payload (e.g. invalid CPF/CNPJ or email, password shorter than 8 characters)",
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
 	@ApiResponse(responseCode = "409", description = "Email or document already registered",
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
-	public ResponseEntity<UserResponse> create(@Valid @RequestBody CreateUserRequest request) {
+	public ResponseEntity<Void> create(@Valid @RequestBody CreateUserRequest request) {
 		UserResponse created = mapper.toResponse(userService.create(request));
 		URI location = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").buildAndExpand(created.id()).toUri();
-		return ResponseEntity.created(location).body(created);
+		return ResponseEntity.created(location).build();
 	}
 
 	/**

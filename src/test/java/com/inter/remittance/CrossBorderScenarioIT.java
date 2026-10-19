@@ -176,7 +176,8 @@ class CrossBorderScenarioIT {
 						"balanceBrl", new BigDecimal(brl)))
 				.retrieve().toEntity(MAP);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-		return (String) response.getBody().get("id");
+		String path = response.getHeaders().getLocation().getPath();
+		return path.substring(path.lastIndexOf('/') + 1);
 	}
 
 	private String cpfToken() {

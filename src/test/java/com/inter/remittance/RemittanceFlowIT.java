@@ -189,7 +189,9 @@ class RemittanceFlowIT {
 				.retrieve().toEntity(MAP);
 
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+		assertThat(response.getBody()).as("sign-up must not echo user data").isNull();
 	}
+
 	@Test
 	void failedRemittanceRollsBackEveryChange() {
 		String token = token();
@@ -324,7 +326,8 @@ class RemittanceFlowIT {
 		String email = unique() + "@mail.com";
 		ResponseEntity<Map<String, Object>> response = createUser(token, "User", email, document, brl, usd);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-		String id = (String) response.getBody().get("id");
+		String path = response.getHeaders().getLocation().getPath();
+		String id = path.substring(path.lastIndexOf('/') + 1);
 		emails.put(id, email);
 		return id;
 	}

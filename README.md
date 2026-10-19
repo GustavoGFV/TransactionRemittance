@@ -130,10 +130,11 @@ From user creation to purchase. Use Swagger UI or `curl` (Bash with `jq`; on Win
 docker compose --profile app up --build -d
 
 # 1. Create the sender (PF, R$ 1,500) and the recipient (PJ). Public sign-up: no token. Valid CPF/CNPJ, unique e-mail and document
-SENDER_ID=$(curl -s -X POST localhost:8080/users -H "Content-Type: application/json" \
-  -d '{"name":"Maria Silva","email":"maria@mail.com","document":"529.982.247-25","password":"S3nh@Forte2026","balanceBrl":1500.00}' | jq -r .id)
-RECIPIENT_ID=$(curl -s -X POST localhost:8080/users -H "Content-Type: application/json" \
-  -d '{"name":"Empresa LTDA","email":"empresa@mail.com","document":"11.222.333/0001-81","password":"S3nh@Forte2026"}' | jq -r .id)
+# The response is 201 with an empty body; only the new public id is returned, in the Location header
+SENDER_ID=$(curl -si -X POST localhost:8080/users -H "Content-Type: application/json" \
+  -d '{"name":"Maria Silva","email":"maria@mail.com","document":"529.982.247-25","password":"S3nh@Forte2026","balanceBrl":1500.00}' | grep -i ^location | tr -d '\r' | sed 's#.*/##')
+RECIPIENT_ID=$(curl -si -X POST localhost:8080/users -H "Content-Type: application/json" \
+  -d '{"name":"Empresa LTDA","email":"empresa@mail.com","document":"11.222.333/0001-81","password":"S3nh@Forte2026"}' | grep -i ^location | tr -d '\r' | sed 's#.*/##')
 
 # 2. Log in as the sender: this USER token only works for the sender's own id
 USER=$(curl -s -X POST localhost:8080/auth/login -H "Content-Type: application/json" \
@@ -245,7 +246,7 @@ Each method is independent and runs against a clean state; only the BCB client i
 | `loginRejectsWrongPasswordAndUnknownEmail` | wrong password and unknown e-mail both return 401 |
 | `userTokenOnlyOperatesOnTheUsersOwnRemittances` | USER token of another user returns 403 |
 | `userManagementRequiresTheRightRole` | USER cannot list users; ADMIN cannot operate remittances (403) |
-| `signUpIsPublic` | `POST /users` works without a token |
+| `signUpIsPublic` | `POST /users` works without a token and returns 201 with an empty body (no user data echoed) |
 | `failedRemittanceRollsBackEveryChange` | a failed remittance leaves balances and limit counter untouched |
 | `reverseRemittanceConvertsUsdBackToBrl` | USD to BRL at the buy quotation, rounded down to the cent |
 | `reverseCanCreditAnotherRegisteredUser` | `recipientDocument` credits the BRL to another registered user |
