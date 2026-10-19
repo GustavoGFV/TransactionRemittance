@@ -77,6 +77,8 @@ public class UserController {
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
 	@ApiResponse(responseCode = "409", description = "Email or document already registered",
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
+	@ApiResponse(responseCode = "429", description = "Rate limit exceeded; see the Retry-After header",
+			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
 	public ResponseEntity<Void> create(@Valid @RequestBody CreateUserRequest request) {
 		UserResponse created = mapper.toResponse(userService.create(request));
 		URI location = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").buildAndExpand(created.id()).toUri();

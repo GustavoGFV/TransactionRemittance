@@ -39,6 +39,8 @@ public class AuthController {
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
 	@ApiResponse(responseCode = "401", description = "Invalid credentials",
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
+	@ApiResponse(responseCode = "429", description = "Rate limit exceeded; see the Retry-After header",
+			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
 	public TokenResponse token(@Valid @RequestBody TokenRequest request) {
 		return tokenService.issue(request);
 	}
@@ -57,6 +59,8 @@ public class AuthController {
 	@ApiResponse(responseCode = "400", description = "Missing e-mail or password",
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
 	@ApiResponse(responseCode = "401", description = "Invalid e-mail or password",
+			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
+	@ApiResponse(responseCode = "429", description = "Rate limit exceeded; see the Retry-After header",
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
 	public TokenResponse login(@Valid @RequestBody LoginRequest request) {
 		return tokenService.login(request);

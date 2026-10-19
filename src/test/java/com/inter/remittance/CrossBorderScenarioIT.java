@@ -56,7 +56,8 @@ import com.inter.remittance.quotation.client.dto.BcbQuotationResponse;
  * a CPF user with R$ 12,000 and a CNPJ user with R$ 0, on a weekday quotation of 5.00 (Friday: 5.20).
  */
 @Import({ TestcontainersConfiguration.class, CrossBorderScenarioIT.MutableClockConfig.class })
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
+		"app.rate-limit.auth-max-requests=100000", "app.rate-limit.quotations-max-requests=100000" })
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class CrossBorderScenarioIT {

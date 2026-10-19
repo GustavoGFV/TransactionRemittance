@@ -48,7 +48,8 @@ import com.inter.remittance.quotation.exception.QuotationUnavailableException;
  * Each test creates its own users with unique documents, so tests do not depend on each other.
  */
 @Import(TestcontainersConfiguration.class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
+		"app.rate-limit.auth-max-requests=100000", "app.rate-limit.quotations-max-requests=100000" })
 class RemittanceFlowIT {
 
 	private static final ParameterizedTypeReference<Map<String, Object>> MAP = new ParameterizedTypeReference<>() { };
