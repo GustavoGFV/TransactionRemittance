@@ -67,8 +67,11 @@ public class UserController {
 	@SecurityRequirements // public sign-up: no token required
 	@PostMapping
 	@Operation(summary = "Create a user",
-			description = "Registers a person (CPF) or company (CNPJ). Document and email must be valid and unique and the password is stored as a BCrypt hash. "
-					+ "Balances are optional and default to 0.")
+			description = "Public sign-up (no token). Registers a person (**CPF**) or company (**CNPJ**) in the `document` field.\n\n"
+					+ "| Field | Required | Behavior |\n|---|---|---|\n"
+					+ "| `name`, `email`, `document`, `password` | yes | Email and document must be valid and unique; password is stored as a BCrypt hash |\n"
+					+ "| `balanceBrl`, `balanceUsd` | **OPTIONAL** | **Default to 0** |\n\n"
+					+ "Next step: `POST /auth/login` with the same email and password.")
 	@ApiResponse(responseCode = "201", description = "User created; the Location header points to the new resource")
 	@ApiResponse(responseCode = "400", description = "Invalid payload (e.g. invalid CPF/CNPJ or email, password shorter than 8 characters)",
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
@@ -114,7 +117,7 @@ public class UserController {
 	@PreAuthorize("hasRole('ADMIN')")
 	@GetMapping
 	@Operation(summary = "List users",
-			description = "Paginated list. All filters are optional and combined with AND; "
+			description = "Paginated list (ADMIN). **All filters are OPTIONAL** and combined with AND; "
 					+ "text filters are case-insensitive and match any part of the value.")
 	@ApiResponse(responseCode = "200", description = "Page of users (empty when nothing matches)")
 	@ApiResponse(responseCode = "400", description = "Invalid query parameter (e.g. size above 100)",

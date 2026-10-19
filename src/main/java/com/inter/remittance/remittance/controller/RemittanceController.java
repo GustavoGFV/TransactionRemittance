@@ -102,8 +102,13 @@ public class RemittanceController {
 	@PreAuthorize("hasRole('USER') and #request.userId().toString() == authentication.name")
 	@PostMapping("/buy")
 	@Operation(summary = "Buy USD with BRL",
-			description = "Debits the sender's BRL and credits USD at the current buy quotation. With isSameAccount=true the USD goes to the sender's own account; "
-					+ "otherwise it goes to the user owning recipientDocument (PF and PJ can send to each other). Either way the amount counts toward the sender's daily limit (CPF: R$ 10,000, CNPJ: R$ 50,000). Atomic: any failure rolls everything back.")
+			description = "Debits the sender's **BRL** and credits **USD** at the current buy quotation.\n\n"
+					+ "| Field | Required | Behavior |\n|---|---|---|\n"
+					+ "| `userId` | yes | Must match the logged user (USER token) |\n"
+					+ "| `amountBrl` | yes | Minimum 1.00 |\n"
+					+ "| `isSameAccount` | yes | `true`: USD goes to your own account; `false`: external transfer |\n"
+					+ "| `recipientDocument` | **OPTIONAL** | **Required only when `isSameAccount` is `false`** (registered user other than the sender); **ignored when `true`** |\n\n"
+					+ "PF and PJ can send to each other. The amount counts toward the sender's daily limit (CPF: R$ 10,000, CNPJ: R$ 50,000). Atomic: any failure rolls everything back.")
 	@ApiResponse(responseCode = "200", description = "Remittance completed")
 	@ApiResponse(responseCode = "400", description = "Invalid payload or recipient document",
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))
@@ -133,7 +138,12 @@ public class RemittanceController {
 	@PreAuthorize("hasRole('USER') and #request.userId().toString() == authentication.name")
 	@PostMapping("/reverse")
 	@Operation(summary = "Reverse remittance (USD to BRL)",
-			description = "Debits the user's USD and credits BRL at the current buy quotation (rounded down to the cent). The BRL goes to the user's own account, or to the registered user owning recipientDocument when it is informed. Does not count toward the daily limit.")
+			description = "Converts the user's **USD back to BRL** at the current buy quotation (rounded down to the cent).\n\n"
+					+ "| Field | Required | Behavior |\n|---|---|---|\n"
+					+ "| `userId` | yes | Must match the logged user (USER token) |\n"
+					+ "| `amountUsd` | yes | Minimum 0.01 |\n"
+					+ "| `recipientDocument` | **OPTIONAL** | **Omit it to credit your own account.** When given, it must be a registered user **other than the sender** |\n\n"
+					+ "Does not count toward the daily limit.")
 	@ApiResponse(responseCode = "200", description = "Conversion completed")
 	@ApiResponse(responseCode = "400", description = "Invalid payload",
 			content = @Content(mediaType = PROBLEM, schema = @Schema(implementation = ProblemDetail.class)))

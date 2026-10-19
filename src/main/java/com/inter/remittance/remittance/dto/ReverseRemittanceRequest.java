@@ -18,7 +18,7 @@ public record ReverseRemittanceRequest(
 		@Schema(description = "Amount to convert, in USD (minimum 0.01)", example = "100.00",
 				requiredMode = Schema.RequiredMode.REQUIRED, minimum = "0.01")
 		@NotNull @DecimalMin("0.01") @Digits(integer = 17, fraction = 2) BigDecimal amountUsd,
-		@Schema(description = "CPF/CNPJ of the registered user who receives the BRL. Optional: when omitted, the BRL is credited to the user's own account",
+		@Schema(description = "**OPTIONAL.** CPF/CNPJ of the registered user who receives the BRL (never your own document). When omitted, the BRL is credited to the user's own account",
 				example = "11.222.333/0001-81", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
 		@ValidDocument String recipientDocument) {
 

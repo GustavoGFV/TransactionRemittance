@@ -50,7 +50,7 @@ public class AuthController {
 	 */
 	@PostMapping("/login")
 	@Operation(summary = "Issue a USER access token",
-			description = "Authenticates a registered user by e-mail and password. The token is bound to that user: "
+			description = "Authenticates a registered user by e-mail and password. **The user must be created first with `POST /users`.** The token is bound to that user: "
 					+ "balance, preview, buy and reverse only work for the user id it was issued to, and the user can read, "
 					+ "update and delete only their own profile.")
 	@ApiResponse(responseCode = "200", description = "Token issued")

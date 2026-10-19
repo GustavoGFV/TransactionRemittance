@@ -22,7 +22,7 @@ public record BuyRemittanceRequest(
 				+ "false: external transfer to the recipient. The daily limit applies to both",
 				example = "false", requiredMode = Schema.RequiredMode.REQUIRED)
 		@NotNull Boolean isSameAccount,
-		@Schema(description = "CPF/CNPJ of the recipient. Required when isSameAccount is false and ignored otherwise",
+		@Schema(description = "**OPTIONAL.** CPF/CNPJ of the recipient. Required only when isSameAccount is false; ignored otherwise",
 				example = "11.222.333/0001-81", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
 		@ValidDocument String recipientDocument) {
 }
