@@ -5,6 +5,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.inter.remittance.quotation.exception.InvalidQuotationDateException;
 import com.inter.remittance.quotation.exception.QuotationNotFoundException;
 import com.inter.remittance.quotation.exception.QuotationUnavailableException;
 
@@ -15,6 +16,11 @@ public class QuotationExceptionHandler {
 	@ExceptionHandler(QuotationNotFoundException.class)
 	ProblemDetail handleNotFound(QuotationNotFoundException ex) {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+	}
+
+	@ExceptionHandler(InvalidQuotationDateException.class)
+	ProblemDetail handleInvalidDate(InvalidQuotationDateException ex) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
 	}
 
 	@ExceptionHandler(QuotationUnavailableException.class)

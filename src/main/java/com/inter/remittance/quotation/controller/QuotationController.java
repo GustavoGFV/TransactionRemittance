@@ -7,15 +7,14 @@ import java.time.format.ResolverStyle;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 import com.inter.remittance.quotation.dto.BuyQuotation;
+import com.inter.remittance.quotation.exception.InvalidQuotationDateException;
 import com.inter.remittance.quotation.service.QuotationService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -53,6 +52,8 @@ public class QuotationController {
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
 	@ApiResponse(responseCode = "404", description = "No quotation found in the recent business days",
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
+	@ApiResponse(responseCode = "429", description = "Rate limit exceeded; see the Retry-After header",
+			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
 	@ApiResponse(responseCode = "503", description = "BCB API unavailable (circuit breaker open or retries exhausted)",
 			content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
 	public CompletableFuture<List<BuyQuotation>> getBuyQuotations(
@@ -72,7 +73,7 @@ public class QuotationController {
 			return LocalDate.parse(raw, BCB_DATE);
 		}
 		catch (DateTimeParseException e) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid date, expected 'MM-dd-yyyy' with single quotes");
+			throw new InvalidQuotationDateException("Invalid date, expected 'MM-dd-yyyy' with single quotes");
 		}
 	}
 
