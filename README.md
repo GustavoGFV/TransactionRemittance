@@ -181,30 +181,97 @@ After each remittance, call the balance endpoint again: BRL decreases, USD incre
 
 ## Tests
 
+### Prerequisites
+
+| Item | Needed for | How to check |
+|---|---|---|
+| JDK 21 | everything | `java -version` (must print 21) |
+| Docker running | integration tests (Testcontainers starts PostgreSQL) | `docker info` (must not fail) |
+| Internet | not needed: the BCB client is mocked in tests | n/a |
+
+### Step by step
+
 ```bash
-./mvnw test      # unit tests (no Docker needed)
-./mvnw verify    # unit + integration tests; integration tests start PostgreSQL with Testcontainers (Docker required)
+# 1. Unit tests only (fast, no Docker)
+./mvnw clean test
+
+# 2. Unit + integration tests (Docker required; the first run downloads postgres:17-alpine)
+./mvnw clean verify
 ```
 
-`RemittanceFlowIT` exercises the full HTTP flow against a real PostgreSQL: token, document validation and duplicates, daily limit, rollback on failure, quotation cache and BCB outage (only the BCB client is mocked). 
+Windows PowerShell: use `.\mvnw.cmd` instead of `./mvnw`. If `mvnw` cannot find Java, set `JAVA_HOME` to a JDK 21 first.
 
-`CrossBorderScenarioIT` runs a business scenario in sequence against PostgreSQL (CPF user with R$ 12,000 and CNPJ user with R$ 0, quotation mocked at 5.00):
+Run a single class or method (replace the names as needed):
 
-| # | Scenario | Expected |
-|---|----------|----------|
-| 1 | CNPJ tries to buy USD with no BRL balance | 422, balances unchanged |
-| 2 | CPF buys USD for R$ 2,000 (own account), sends R$ 2,000 to the CNPJ, then tries R$ 7,000 | first two succeed; the last returns 422 (daily limit of R$ 10,000 exceeded) |
-| 3 | CNPJ converts 200 USD back to BRL | R$ 1,000 credited, CNPJ ends with 200 USD and R$ 1,000 |
-| 4 | CNPJ buys USD for R$ 1,000 on a simulated Saturday | BCB queried only with the previous Friday ('10-16-2026'); Friday quotation applied |
+```bash
+# Unit test classes (Surefire): use -Dtest
+./mvnw test -Dtest=RemittanceTransactionServiceTest
+./mvnw test -Dtest=QuotationServiceTest#<methodName>
 
-Cache and resilience tests:
+# Integration tests (Failsafe): use -Dit.test together with verify
+./mvnw verify -Dit.test=CrossBorderScenarioIT
+./mvnw verify -Dit.test=RemittanceFlowIT
+./mvnw verify -Dit.test=InterApplicationIT
+./mvnw verify -Dit.test=RemittanceFlowIT#reverseRemittanceConvertsUsdBackToBrl -Dtest=NoSuchTest -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+Expected result: `BUILD SUCCESS`. Reports: `target/surefire-reports` (unit) and `target/failsafe-reports` (integration); coverage at `target/site/jacoco/index.html`.
+
+### Test map
+
+| Type | Class | What it covers | Docker |
+|---|---|---|---|
+| Unit | `TokenServiceTest` | ADMIN token, USER login, wrong credentials | no |
+| Unit | `UserServiceTest` | user creation, uniqueness, update, delete, listing | no |
+| Unit | `DocumentsTest` | CPF/CNPJ validation and normalization | no |
+| Unit | `RemittanceServiceTest` | buy, preview and reverse orchestration, errors | no |
+| Unit | `RemittanceTransactionServiceTest` | balances, daily limit, rollback, ordered locks | no |
+| Unit | `QuotationServiceTest` | BCB lookup, weekend/holiday fallback, stale-if-error | no |
+| Unit | `QuotationCacheTest` | cache hit/miss, TTL expiry, stampede (50 concurrent calls = 1 BCB call) | no |
+| Integration | `InterApplicationIT` | Spring context starts against real PostgreSQL and Flyway migrations apply | yes |
+| Integration | `RemittanceFlowIT` | full HTTP flow (list below) | yes |
+| Integration | `CrossBorderScenarioIT` | business scenario in 4 ordered steps (list below) | yes |
+
+### Integration test: `RemittanceFlowIT`
+
+Each method is independent and runs against a clean state; only the BCB client is mocked.
+
+| Method | What it verifies |
+|---|---|
+| `securedEndpointsRejectRequestsWithoutToken` | `/users` and `/remittances` return 401 without a token |
+| `userValidationRejectsInvalidAndDuplicatedDocuments` | invalid CPF/CNPJ and duplicated document/e-mail are rejected (400/409) |
+| `externalTransferConsumesAndEnforcesTheDailyLimit` | transfer to another user consumes the daily limit and the excess returns 422 |
+| `sameAccountPurchaseAlsoCountsTowardTheDailyLimit` | a purchase into the own account also counts toward the limit |
+| `loginRejectsWrongPasswordAndUnknownEmail` | wrong password and unknown e-mail both return 401 |
+| `userTokenOnlyOperatesOnTheUsersOwnRemittances` | USER token of another user returns 403 |
+| `userManagementRequiresTheRightRole` | USER cannot list users; ADMIN cannot operate remittances (403) |
+| `signUpIsPublic` | `POST /users` works without a token |
+| `failedRemittanceRollsBackEveryChange` | a failed remittance leaves balances and limit counter untouched |
+| `reverseRemittanceConvertsUsdBackToBrl` | USD to BRL at the buy quotation, rounded down to the cent |
+| `reverseCanCreditAnotherRegisteredUser` | `recipientDocument` credits the BRL to another registered user |
+| `quotationIsFetchedFromTheBcbOnlyOncePerDay` | second call is served by the cache (one BCB call) |
+| `quotationEndpointAcceptsTheBcbDateFormatWithAndWithoutSingleQuotes` | `'MM-dd-yyyy'` accepted with and without quotes; other formats return 400 |
+| `bcbOutageIsReportedAsServiceUnavailableAndNotCached` | BCB failure returns 503 and the failure is not cached |
+| `lastKnownQuotationIsServedWhenTheBcbFailsAfterASuccess` | stale-if-error: last known quotation served and counted in metrics |
+
+### Integration test: `CrossBorderScenarioIT`
+
+The scenario runs in order against PostgreSQL. Initial state: CPF user with R$ 12,000 and CNPJ user with R$ 0 (quotation mocked at 5.00).
+
+| # | Method | Scenario | Expected |
+|---|---|---|---|
+| 1 | `cnpjWithoutBalanceCannotBuyUsd` | CNPJ tries to buy USD with no BRL balance | 422, balances unchanged |
+| 2 | `cpfTransfersToOwnAccountAndToTheCnpjUntilTheDailyLimitBlocksTheNextBuy` | CPF buys USD for R$ 2,000 (own account), sends R$ 2,000 to the CNPJ, then tries R$ 7,000 | first two succeed; the last returns 422 (daily limit of R$ 10,000 exceeded) |
+| 3 | `cnpjConvertsPartOfItsUsdBackToBrl` | CNPJ converts 200 USD back to BRL | R$ 1,000 credited, CNPJ ends with 200 USD and R$ 1,000 |
+| 4 | `weekendOperationUsesTheLastBusinessDayQuotation` | CNPJ buys USD for R$ 1,000 on a simulated Saturday | BCB queried only with the previous Friday ('10-16-2026'); Friday quotation applied |
+
+### Cache and resilience
 
 | Test | Validates |
 |------|-----------|
 | `QuotationCacheTest` (no Docker) | 50 concurrent requests produce 1 BCB call; repeated request is a cache hit; entry expires after the TTL; hit/miss stats are recorded |
 | `QuotationServiceTest` | stale quotation served when the BCB fails (and counted); error propagated when nothing is remembered; "not found" is never masked by stale data |
 | `RemittanceFlowIT` | end to end: stale quotation served over HTTP after an outage, `cache.gets` metric registered, outage without history returns 503 |
-
 The test classes start with a `/* ... */` index comment listing what each scenario covers.
 
 The JaCoCo report is generated at `target/site/jacoco/index.html`.
