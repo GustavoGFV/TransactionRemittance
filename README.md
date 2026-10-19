@@ -204,7 +204,9 @@ The JaCoCo report is generated at `target/site/jacoco/index.html`.
 ## Kubernetes
 
 ```bash
+docker build -t inter-remittance:latest .   # image name expected by k8s/app/deployment.yaml (local clusters must see it, e.g. `kind load docker-image`)
 kubectl apply -f k8s/secret.yaml -f k8s/database -f k8s/app
+kubectl get pods                                 # wait for 2/2 inter-remittance replicas Ready
 ```
 
 The deployment sets G1GC, heap as a percentage of the container limit (memory request = limit), Hikari pool size and probes. Replace the secrets in `k8s/secret.yaml` before using it for real.
