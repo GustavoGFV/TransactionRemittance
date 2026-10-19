@@ -102,6 +102,14 @@ docker compose --profile app up --build -d
 - Swagger UI: http://localhost:8080/swagger-ui/index.html
 - Health: http://localhost:8080/actuator/health
 
+**PostgreSQL without Compose.** The official image refuses to start without a superuser password ("Database is uninitialized and superuser password is not specified"). Prefer `docker compose up -d postgres` (defaults are already set in `docker-compose.yml`); if you run the container by hand, pass the variables the application expects:
+
+```bash
+docker run -d --name remittance-postgres -p 5432:5432 \
+  -e POSTGRES_DB=remittance -e POSTGRES_USER=remittance -e POSTGRES_PASSWORD=remittance \
+  postgres:17-alpine
+```
+
 ### Authentication and authorization
 
 Two kinds of Bearer (JWT, HS256) tokens are issued:
