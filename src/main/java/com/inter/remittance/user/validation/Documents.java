@@ -71,18 +71,29 @@ public final class Documents {
 		int sum = 0;
 		int offset = CNPJ_WEIGHTS.length - length;
 		for (int i = 0; i < length; i++) {
-			sum += charValue(cnpj.charAt(i)) * CNPJ_WEIGHTS[offset + i];
+			sum += cnpjCharValue(cnpj.charAt(i)) * CNPJ_WEIGHTS[offset + i];
 		}
 		int remainder = sum % 11;
 		return remainder < 2 ? 0 : 11 - remainder;
 	}
 
-	// Alphanumeric CNPJ: value is the ASCII code minus 48 ('0'..'9' -> 0..9, 'A'..'Z' -> 17..42)
-	private static int charValue(char c) {
+	/**
+	 * Value of a CNPJ character in the check-digit sum, as defined for the alphanumeric CNPJ:
+	 * the ASCII code minus 48 (the code of '0'). So '0'..'9' give 0..9 and 'A'..'Z' give 17..42.
+	 * Only valid for the first 12 positions, which may hold letters.
+	 */
+	private static int cnpjCharValue(char c) {
 		return c - '0';
 	}
 
+	/**
+	 * Numeric value of a position that is always a digit (CPF digits and the two CNPJ check digits).
+	 * Callers must have verified the character is a digit; a letter here would be a bug, so it fails fast.
+	 */
 	private static int digit(char c) {
+		if (!Character.isDigit(c)) {
+			throw new IllegalArgumentException("Expected a digit but found '" + c + "'");
+		}
 		return c - '0';
 	}
 

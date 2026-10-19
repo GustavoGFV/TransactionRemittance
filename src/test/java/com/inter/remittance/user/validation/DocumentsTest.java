@@ -33,6 +33,23 @@ class DocumentsTest {
 		assertThat(Documents.isValid(document)).isFalse();
 	}
 
+	@ParameterizedTest
+	@ValueSource(strings = { "12ABC34501DEAB", "12ABC34501DE3A", "12ABC34501DEA5", "1234567890A" })
+	void rejectsLettersInCheckDigitPositions(String document) {
+		assertThat(Documents.isValid(document)).isFalse();
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = { "12ABC34501DE36", "12ABC34501DE45", "12ABD34501DE35", "13ABC34501DE35" })
+	void rejectsAlphanumericCnpjWithWrongCheckDigitOrTamperedBody(String cnpj) {
+		assertThat(Documents.isValid(cnpj)).isFalse();
+	}
+
+	@Test
+	void alphanumericCnpjIsCaseInsensitiveAndAcceptsPunctuation() {
+		assertThat(Documents.isValid("12.abc.345/01de-35")).isTrue();
+	}
+
 	@Test
 	void normalizeRemovesPunctuationAndUpperCases() {
 		assertThat(Documents.normalize("12.abc.345/01de-35")).isEqualTo("12ABC34501DE35");
